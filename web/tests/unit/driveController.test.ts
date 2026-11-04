@@ -41,7 +41,7 @@ const engine = {
   },
 } as never;
 
-async function session(store: InstanceType<typeof Store>, sid: string) {
+async function session(store: Awaited<ReturnType<typeof Store.open>>, sid: string) {
   const p = planCoverage({ gi, zoneInfo: req.zoneInfo, requirements: req.requirements, observed: new Map(), excluded: new Set(), policy: 'STRICT_INSIDE', start: { edgeId: 'osm:w100:n1-n2:f', offsetMeters: 0, source: 'selected_start' }, meta: { planId: 'p1', graphHash: g.contentHash, zoneVersion: 1, progressRevision: 0, planningRevision: 1, createdAt: 'x' } });
   const header = {
     schemaVersion: '1.0.0', sessionId: sid, graphId: g.graphId, contentHash: g.contentHash, zone: { zoneId: 'z', zoneVersion: 1, definition: zone },
