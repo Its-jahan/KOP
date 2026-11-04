@@ -1,0 +1,421 @@
+{
+ "fixtureId": "F14_eligibility",
+ "title": "Unpaved legal road vs private access, barrier and footpath",
+ "description": "Eligibility differs for the documented reason.",
+ "contractVersion": "1.0.0",
+ "kind": "graph",
+ "input": {
+  "osm": {
+   "osm3s": {
+    "timestamp_osm_base": "fixture"
+   },
+   "elements": [
+    {
+     "type": "node",
+     "id": 1,
+     "lat": 40.18,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 2,
+     "lat": 40.18,
+     "lon": 44.5011758
+    },
+    {
+     "type": "node",
+     "id": 3,
+     "lat": 40.18,
+     "lon": 44.5023515
+    },
+    {
+     "type": "node",
+     "id": 4,
+     "lat": 40.1809044,
+     "lon": 44.5011758
+    },
+    {
+     "type": "node",
+     "id": 5,
+     "lat": 40.1809044,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 6,
+     "lat": 40.1809044,
+     "lon": 44.5023515
+    },
+    {
+     "type": "node",
+     "id": 7,
+     "lat": 40.18,
+     "lon": 44.5035273,
+     "tags": {
+      "barrier": "bollard"
+     }
+    },
+    {
+     "type": "node",
+     "id": 8,
+     "lat": 40.18,
+     "lon": 44.5047031
+    },
+    {
+     "type": "node",
+     "id": 9,
+     "lat": 40.1809044,
+     "lon": 44.5035273,
+     "tags": {
+      "barrier": "gate"
+     }
+    },
+    {
+     "type": "node",
+     "id": 10,
+     "lat": 40.1809044,
+     "lon": 44.5047031
+    },
+    {
+     "type": "way",
+     "id": 201,
+     "nodes": [
+      1,
+      2
+     ],
+     "tags": {
+      "highway": "residential",
+      "surface": "unpaved"
+     }
+    },
+    {
+     "type": "way",
+     "id": 202,
+     "nodes": [
+      2,
+      4
+     ],
+     "tags": {
+      "highway": "service",
+      "access": "private"
+     }
+    },
+    {
+     "type": "way",
+     "id": 203,
+     "nodes": [
+      2,
+      3
+     ],
+     "tags": {
+      "highway": "footway"
+     }
+    },
+    {
+     "type": "way",
+     "id": 204,
+     "nodes": [
+      4,
+      5
+     ],
+     "tags": {
+      "highway": "track"
+     }
+    },
+    {
+     "type": "way",
+     "id": 205,
+     "nodes": [
+      4,
+      6
+     ],
+     "tags": {
+      "highway": "track",
+      "motor_vehicle": "yes",
+      "surface": "dirt"
+     }
+    },
+    {
+     "type": "way",
+     "id": 206,
+     "nodes": [
+      3,
+      7,
+      8
+     ],
+     "tags": {
+      "highway": "service"
+     }
+    },
+    {
+     "type": "way",
+     "id": 207,
+     "nodes": [
+      6,
+      9,
+      10
+     ],
+     "tags": {
+      "highway": "service"
+     }
+    },
+    {
+     "type": "way",
+     "id": 208,
+     "nodes": [
+      1,
+      5
+     ],
+     "tags": {
+      "highway": "unclassified",
+      "maxwidth": "1.5"
+     }
+    }
+   ]
+  },
+  "zone": {
+   "type": "polygon",
+   "coordinates": [
+    [
+     44.4994121,
+     40.1795478
+    ],
+    [
+     44.505291,
+     40.1795478
+    ],
+    [
+     44.505291,
+     40.1813566
+    ],
+    [
+     44.4994121,
+     40.1813566
+    ]
+   ]
+  },
+  "policies": [],
+  "start": null
+ },
+ "expected": {
+  "graph": {
+   "contentHash": "e8a8dd2d27c6f30fbe461be6684e7953408c8bf5378b7ba5b056727dc8e3e30f",
+   "graphId": "g-e8a8dd2d27c6f30f",
+   "nodeCount": 10,
+   "edgeCount": 20,
+   "restrictionCount": 0,
+   "edgeIds": [
+    "osm:w201:n1-n2:b",
+    "osm:w201:n1-n2:f",
+    "osm:w202:n2-n4:b",
+    "osm:w202:n2-n4:f",
+    "osm:w203:n2-n3:b",
+    "osm:w203:n2-n3:f",
+    "osm:w204:n4-n5:b",
+    "osm:w204:n4-n5:f",
+    "osm:w205:n4-n6:b",
+    "osm:w205:n4-n6:f",
+    "osm:w206:n3-n7:b",
+    "osm:w206:n3-n7:f",
+    "osm:w206:n7-n8:b",
+    "osm:w206:n7-n8:f",
+    "osm:w207:n6-n9:b",
+    "osm:w207:n6-n9:f",
+    "osm:w207:n9-n10:b",
+    "osm:w207:n9-n10:f",
+    "osm:w208:n1-n5:b",
+    "osm:w208:n1-n5:f"
+   ],
+   "eligibility": {
+    "osm:w201:n1-n2:b": "eligible",
+    "osm:w201:n1-n2:f": "eligible",
+    "osm:w202:n2-n4:b": "excluded",
+    "osm:w202:n2-n4:f": "excluded",
+    "osm:w203:n2-n3:b": "excluded",
+    "osm:w203:n2-n3:f": "excluded",
+    "osm:w204:n4-n5:b": "needsReview",
+    "osm:w204:n4-n5:f": "needsReview",
+    "osm:w205:n4-n6:b": "eligible",
+    "osm:w205:n4-n6:f": "eligible",
+    "osm:w206:n3-n7:b": "eligible",
+    "osm:w206:n3-n7:f": "eligible",
+    "osm:w206:n7-n8:b": "eligible",
+    "osm:w206:n7-n8:f": "eligible",
+    "osm:w207:n6-n9:b": "eligible",
+    "osm:w207:n6-n9:f": "eligible",
+    "osm:w207:n9-n10:b": "eligible",
+    "osm:w207:n9-n10:f": "eligible",
+    "osm:w208:n1-n5:b": "excluded",
+    "osm:w208:n1-n5:f": "excluded"
+   },
+   "eligibilityReason": {
+    "osm:w202:n2-n4:b": "access_private",
+    "osm:w202:n2-n4:f": "access_private",
+    "osm:w203:n2-n3:b": "not_car_road_footway",
+    "osm:w203:n2-n3:f": "not_car_road_footway",
+    "osm:w204:n4-n5:b": "track_car_access_unverified",
+    "osm:w204:n4-n5:f": "track_car_access_unverified",
+    "osm:w208:n1-n5:b": "vehicle_limit_width",
+    "osm:w208:n1-n5:f": "vehicle_limit_width"
+   },
+   "nodePassage": {
+    "osm:n7": "blocked",
+    "osm:n9": "unverified"
+   },
+   "restrictions": []
+  },
+  "requirements": [
+   {
+    "requirementId": "osm:w201:n1-n2:b#0",
+    "edgeId": "osm:w201:n1-n2:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w201:n1-n2:f#0",
+    "edgeId": "osm:w201:n1-n2:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w204:n4-n5:b#0",
+    "edgeId": "osm:w204:n4-n5:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "needsReview"
+   },
+   {
+    "requirementId": "osm:w204:n4-n5:f#0",
+    "edgeId": "osm:w204:n4-n5:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "needsReview"
+   },
+   {
+    "requirementId": "osm:w205:n4-n6:b#0",
+    "edgeId": "osm:w205:n4-n6:b",
+    "start": 0,
+    "end": 99.88,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w205:n4-n6:f#0",
+    "edgeId": "osm:w205:n4-n6:f",
+    "start": 0,
+    "end": 99.88,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w206:n3-n7:b#0",
+    "edgeId": "osm:w206:n3-n7:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w206:n3-n7:f#0",
+    "edgeId": "osm:w206:n3-n7:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w206:n7-n8:b#0",
+    "edgeId": "osm:w206:n7-n8:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w206:n7-n8:f#0",
+    "edgeId": "osm:w206:n7-n8:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w207:n6-n9:b#0",
+    "edgeId": "osm:w207:n6-n9:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w207:n6-n9:f#0",
+    "edgeId": "osm:w207:n6-n9:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w207:n9-n10:b#0",
+    "edgeId": "osm:w207:n9-n10:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w207:n9-n10:f#0",
+    "edgeId": "osm:w207:n9-n10:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   }
+  ],
+  "plans": {},
+  "paths": {},
+  "tracks": {}
+ },
+ "assertions": [
+  {
+   "kind": "eligibility",
+   "edgeId": "osm:w201:n1-n2:f",
+   "value": "eligible"
+  },
+  {
+   "kind": "eligibility",
+   "edgeId": "osm:w202:n2-n4:f",
+   "value": "excluded",
+   "reason": "access_private"
+  },
+  {
+   "kind": "eligibility",
+   "edgeId": "osm:w203:n2-n3:f",
+   "value": "excluded",
+   "reason": "not_car_road_footway"
+  },
+  {
+   "kind": "eligibility",
+   "edgeId": "osm:w204:n4-n5:f",
+   "value": "needsReview",
+   "reason": "track_car_access_unverified"
+  },
+  {
+   "kind": "eligibility",
+   "edgeId": "osm:w205:n4-n6:f",
+   "value": "eligible"
+  },
+  {
+   "kind": "eligibility",
+   "edgeId": "osm:w208:n1-n5:f",
+   "value": "excluded",
+   "reason": "vehicle_limit_width"
+  },
+  {
+   "kind": "node_passage",
+   "nodeId": "osm:n7",
+   "value": "blocked"
+  },
+  {
+   "kind": "node_passage",
+   "nodeId": "osm:n9",
+   "value": "unverified"
+  }
+ ],
+ "tolerances": {
+  "offsetMeters": 0.5,
+  "totalsMeters": 1
+ }
+}

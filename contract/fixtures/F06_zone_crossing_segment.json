@@ -1,0 +1,230 @@
+{
+ "fixtureId": "F06_zone_crossing_segment",
+ "title": "Zone-crossing segment",
+ "description": "Clipping creates two in-zone intervals per direction and no artificial node, turn or connection.",
+ "contractVersion": "1.0.0",
+ "kind": "graph",
+ "input": {
+  "osm": {
+   "osm3s": {
+    "timestamp_osm_base": "fixture"
+   },
+   "elements": [
+    {
+     "type": "node",
+     "id": 1,
+     "lat": 40.18,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 2,
+     "lat": 40.18,
+     "lon": 44.5035273
+    },
+    {
+     "type": "way",
+     "id": 50,
+     "nodes": [
+      1,
+      2
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    }
+   ]
+  },
+  "zone": {
+   "type": "polygon",
+   "coordinates": [
+    [
+     44.4994121,
+     40.1795478
+    ],
+    [
+     44.5041152,
+     40.1795478
+    ],
+    [
+     44.5041152,
+     40.1804522
+    ],
+    [
+     44.5025867,
+     40.1804522
+    ],
+    [
+     44.5025867,
+     40.1798191
+    ],
+    [
+     44.5009406,
+     40.1798191
+    ],
+    [
+     44.5009406,
+     40.1804522
+    ],
+    [
+     44.4994121,
+     40.1804522
+    ]
+   ]
+  },
+  "policies": [
+   "STRICT_INSIDE",
+   "ALLOW_NECESSARY_CONNECTORS"
+  ],
+  "start": {
+   "edgeId": "osm:w50:n1-n2:f",
+   "offsetMeters": 0
+  }
+ },
+ "expected": {
+  "graph": {
+   "contentHash": "9bfe34c05c440ea9aa1bcb8e471d8bbbb1e3bf72e505bf436190b731c29d7d86",
+   "graphId": "g-9bfe34c05c440ea9",
+   "nodeCount": 2,
+   "edgeCount": 2,
+   "restrictionCount": 0,
+   "edgeIds": [
+    "osm:w50:n1-n2:b",
+    "osm:w50:n1-n2:f"
+   ],
+   "eligibility": {
+    "osm:w50:n1-n2:b": "eligible",
+    "osm:w50:n1-n2:f": "eligible"
+   },
+   "eligibilityReason": {},
+   "nodePassage": {},
+   "restrictions": []
+  },
+  "requirements": [
+   {
+    "requirementId": "osm:w50:n1-n2:b#0",
+    "edgeId": "osm:w50:n1-n2:b",
+    "start": 0,
+    "end": 79.91,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w50:n1-n2:b#1",
+    "edgeId": "osm:w50:n1-n2:b",
+    "start": 219.75,
+    "end": 299.66,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w50:n1-n2:f#0",
+    "edgeId": "osm:w50:n1-n2:f",
+    "start": 0,
+    "end": 79.91,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w50:n1-n2:f#1",
+    "edgeId": "osm:w50:n1-n2:f",
+    "start": 219.75,
+    "end": 299.66,
+    "status": "unvisited"
+   }
+  ],
+  "plans": {
+   "STRICT_INSIDE": {
+    "status": "failed",
+    "edgeSequence": [],
+    "stepKinds": [],
+    "turnarounds": [],
+    "coveredRequirementIds": [],
+    "unreachable": [
+     "osm:w50:n1-n2:b#0:outside_policy",
+     "osm:w50:n1-n2:b#1:outside_policy",
+     "osm:w50:n1-n2:f#0:outside_policy",
+     "osm:w50:n1-n2:f#1:outside_policy"
+    ],
+    "totals": {
+     "totalMeters": 0,
+     "newCoverageMeters": 0,
+     "repeatMeters": 0,
+     "outsideMeters": 0,
+     "approachMeters": 0
+    },
+    "valid": true,
+    "validationErrors": []
+   },
+   "ALLOW_NECESSARY_CONNECTORS": {
+    "status": "complete",
+    "edgeSequence": [
+     "osm:w50:n1-n2:f",
+     "osm:w50:n1-n2:b"
+    ],
+    "stepKinds": [
+     "required",
+     "required"
+    ],
+    "turnarounds": [
+     "1:unverified"
+    ],
+    "coveredRequirementIds": [
+     "osm:w50:n1-n2:b#0",
+     "osm:w50:n1-n2:b#1",
+     "osm:w50:n1-n2:f#0",
+     "osm:w50:n1-n2:f#1"
+    ],
+    "unreachable": [],
+    "totals": {
+     "totalMeters": 599.3,
+     "newCoverageMeters": 319.6,
+     "repeatMeters": 0,
+     "outsideMeters": 279.7,
+     "approachMeters": 0
+    },
+    "valid": true,
+    "validationErrors": []
+   }
+  },
+  "paths": {},
+  "tracks": {}
+ },
+ "assertions": [
+  {
+   "kind": "node_count",
+   "count": 2
+  },
+  {
+   "kind": "requirement_count",
+   "count": 4
+  },
+  {
+   "kind": "requirement_interval",
+   "requirementId": "osm:w50:n1-n2:f#0",
+   "start": 0,
+   "end": 80
+  },
+  {
+   "kind": "requirement_interval",
+   "requirementId": "osm:w50:n1-n2:f#1",
+   "start": 220,
+   "end": 300
+  },
+  {
+   "kind": "plan_status",
+   "policy": "STRICT_INSIDE",
+   "status": "failed"
+  },
+  {
+   "kind": "plan_covers_all",
+   "policy": "ALLOW_NECESSARY_CONNECTORS"
+  },
+  {
+   "kind": "plan_outside_at_least",
+   "policy": "ALLOW_NECESSARY_CONNECTORS",
+   "meters": 279
+  }
+ ],
+ "tolerances": {
+  "offsetMeters": 0.5,
+  "totalsMeters": 1
+ }
+}

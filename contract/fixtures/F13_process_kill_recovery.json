@@ -1,0 +1,147 @@
+{
+ "fixtureId": "F13_process_kill_recovery",
+ "title": "Process kill or reload while writing",
+ "description": "Recover the last valid state without corrupting the session.",
+ "contractVersion": "1.0.0",
+ "kind": "recoverEventLog",
+ "cases": [
+  {
+   "name": "clean_log",
+   "records": [
+    "{\"eventId\":\"e1\",\"seq\":1,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000001,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e2\",\"seq\":2,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000002,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e3\",\"seq\":3,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000003,\"schemaVersion\":\"1.0.0\",\"payload\":{}}"
+   ],
+   "sessionId": "s1",
+   "expected": {
+    "eventIds": [
+     "e1",
+     "e2",
+     "e3"
+    ],
+    "lastValidSeq": 3,
+    "discarded": []
+   }
+  },
+  {
+   "name": "torn_last_record",
+   "records": [
+    "{\"eventId\":\"e1\",\"seq\":1,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000001,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e2\",\"seq\":2,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000002,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e3\",\"seq\":3,\""
+   ],
+   "sessionId": "s1",
+   "expected": {
+    "eventIds": [
+     "e1",
+     "e2"
+    ],
+    "lastValidSeq": 2,
+    "discarded": [
+     {
+      "index": 2,
+      "reason": "corrupt_record"
+     }
+    ]
+   }
+  },
+  {
+   "name": "duplicate_replayed_event",
+   "records": [
+    "{\"eventId\":\"e1\",\"seq\":1,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000001,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e2\",\"seq\":2,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000002,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e2\",\"seq\":2,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000002,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e3\",\"seq\":3,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000003,\"schemaVersion\":\"1.0.0\",\"payload\":{}}"
+   ],
+   "sessionId": "s1",
+   "expected": {
+    "eventIds": [
+     "e1",
+     "e2",
+     "e3"
+    ],
+    "lastValidSeq": 3,
+    "discarded": [
+     {
+      "index": 2,
+      "reason": "duplicate_event"
+     }
+    ]
+   }
+  },
+  {
+   "name": "sequence_gap_then_more",
+   "records": [
+    "{\"eventId\":\"e1\",\"seq\":1,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000001,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e2\",\"seq\":2,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000002,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e4\",\"seq\":4,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000004,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e5\",\"seq\":5,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000005,\"schemaVersion\":\"1.0.0\",\"payload\":{}}"
+   ],
+   "sessionId": "s1",
+   "expected": {
+    "eventIds": [
+     "e1",
+     "e2"
+    ],
+    "lastValidSeq": 2,
+    "discarded": [
+     {
+      "index": 2,
+      "reason": "sequence_gap"
+     },
+     {
+      "index": 3,
+      "reason": "after_corruption"
+     }
+    ]
+   }
+  },
+  {
+   "name": "foreign_session_record",
+   "records": [
+    "{\"eventId\":\"e1\",\"seq\":1,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000001,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"x1\",\"seq\":1,\"sessionId\":\"s2\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000001,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e2\",\"seq\":2,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000002,\"schemaVersion\":\"1.0.0\",\"payload\":{}}"
+   ],
+   "sessionId": "s1",
+   "expected": {
+    "eventIds": [
+     "e1",
+     "e2"
+    ],
+    "lastValidSeq": 2,
+    "discarded": [
+     {
+      "index": 1,
+      "reason": "foreign_session"
+     }
+    ]
+   }
+  },
+  {
+   "name": "invalid_record_shape",
+   "records": [
+    "{\"eventId\":\"e1\",\"seq\":1,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000001,\"schemaVersion\":\"1.0.0\",\"payload\":{}}",
+    "{\"eventId\":\"e2\"}",
+    "{\"eventId\":\"e3\",\"seq\":3,\"sessionId\":\"s1\",\"type\":\"traversal_confirmed\",\"timestamp\":1700000000003,\"schemaVersion\":\"1.0.0\",\"payload\":{}}"
+   ],
+   "sessionId": "s1",
+   "expected": {
+    "eventIds": [
+     "e1"
+    ],
+    "lastValidSeq": 1,
+    "discarded": [
+     {
+      "index": 1,
+      "reason": "invalid_record"
+     },
+     {
+      "index": 2,
+      "reason": "after_corruption"
+     }
+    ]
+   }
+  }
+ ]
+}

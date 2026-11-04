@@ -1,0 +1,243 @@
+{
+ "fixtureId": "F03_branch_dead_end",
+ "title": "Branch and dead end",
+ "description": "Full feasible coverage with necessary repeated travel explicitly counted; turnarounds flagged.",
+ "contractVersion": "1.0.0",
+ "kind": "graph",
+ "input": {
+  "osm": {
+   "osm3s": {
+    "timestamp_osm_base": "fixture"
+   },
+   "elements": [
+    {
+     "type": "node",
+     "id": 1,
+     "lat": 40.18,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 2,
+     "lat": 40.18,
+     "lon": 44.5011758
+    },
+    {
+     "type": "node",
+     "id": 3,
+     "lat": 40.18,
+     "lon": 44.5023515
+    },
+    {
+     "type": "node",
+     "id": 4,
+     "lat": 40.1807235,
+     "lon": 44.5011758,
+     "tags": {
+      "highway": "turning_circle"
+     }
+    },
+    {
+     "type": "way",
+     "id": 20,
+     "nodes": [
+      1,
+      2,
+      3
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    },
+    {
+     "type": "way",
+     "id": 21,
+     "nodes": [
+      2,
+      4
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    }
+   ]
+  },
+  "zone": {
+   "type": "polygon",
+   "coordinates": [
+    [
+     44.4994121,
+     40.1795478
+    ],
+    [
+     44.5029394,
+     40.1795478
+    ],
+    [
+     44.5029394,
+     40.1811757
+    ],
+    [
+     44.4994121,
+     40.1811757
+    ]
+   ]
+  },
+  "policies": [
+   "STRICT_INSIDE"
+  ],
+  "start": {
+   "edgeId": "osm:w20:n1-n2:f",
+   "offsetMeters": 0
+  },
+  "maneuvers": true
+ },
+ "expected": {
+  "graph": {
+   "contentHash": "8e80a68dc8038df7847bb7760a5ac4ab3b1ac4802a29512f16b7357ac2a25eb1",
+   "graphId": "g-8e80a68dc8038df7",
+   "nodeCount": 4,
+   "edgeCount": 6,
+   "restrictionCount": 0,
+   "edgeIds": [
+    "osm:w20:n1-n2:b",
+    "osm:w20:n1-n2:f",
+    "osm:w20:n2-n3:b",
+    "osm:w20:n2-n3:f",
+    "osm:w21:n2-n4:b",
+    "osm:w21:n2-n4:f"
+   ],
+   "eligibility": {
+    "osm:w20:n1-n2:b": "eligible",
+    "osm:w20:n1-n2:f": "eligible",
+    "osm:w20:n2-n3:b": "eligible",
+    "osm:w20:n2-n3:f": "eligible",
+    "osm:w21:n2-n4:b": "eligible",
+    "osm:w21:n2-n4:f": "eligible"
+   },
+   "eligibilityReason": {},
+   "nodePassage": {},
+   "restrictions": []
+  },
+  "requirements": [
+   {
+    "requirementId": "osm:w20:n1-n2:b#0",
+    "edgeId": "osm:w20:n1-n2:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w20:n1-n2:f#0",
+    "edgeId": "osm:w20:n1-n2:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w20:n2-n3:b#0",
+    "edgeId": "osm:w20:n2-n3:b",
+    "start": 0,
+    "end": 99.88,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w20:n2-n3:f#0",
+    "edgeId": "osm:w20:n2-n3:f",
+    "start": 0,
+    "end": 99.88,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w21:n2-n4:b#0",
+    "edgeId": "osm:w21:n2-n4:b",
+    "start": 0,
+    "end": 80.45,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w21:n2-n4:f#0",
+    "edgeId": "osm:w21:n2-n4:f",
+    "start": 0,
+    "end": 80.45,
+    "status": "unvisited"
+   }
+  ],
+  "plans": {
+   "STRICT_INSIDE": {
+    "status": "complete",
+    "edgeSequence": [
+     "osm:w20:n1-n2:f",
+     "osm:w21:n2-n4:f",
+     "osm:w21:n2-n4:b",
+     "osm:w20:n1-n2:b",
+     "osm:w20:n1-n2:f",
+     "osm:w20:n2-n3:f",
+     "osm:w20:n2-n3:b"
+    ],
+    "stepKinds": [
+     "required",
+     "required",
+     "required",
+     "required",
+     "transit",
+     "required",
+     "required"
+    ],
+    "turnarounds": [
+     "2:verified",
+     "4:unverified",
+     "6:unverified"
+    ],
+    "coveredRequirementIds": [
+     "osm:w20:n1-n2:b#0",
+     "osm:w20:n1-n2:f#0",
+     "osm:w20:n2-n3:b#0",
+     "osm:w20:n2-n3:f#0",
+     "osm:w21:n2-n4:b#0",
+     "osm:w21:n2-n4:f#0"
+    ],
+    "unreachable": [],
+    "totals": {
+     "totalMeters": 660.3,
+     "newCoverageMeters": 560.4,
+     "repeatMeters": 99.9,
+     "outsideMeters": 0,
+     "approachMeters": 0
+    },
+    "valid": true,
+    "validationErrors": [],
+    "maneuvers": [
+     "depart",
+     "left",
+     "turnaround:verified",
+     "right",
+     "turnaround:unverified",
+     "turnaround:unverified",
+     "arrive"
+    ]
+   }
+  },
+  "paths": {},
+  "tracks": {}
+ },
+ "assertions": [
+  {
+   "kind": "plan_covers_all",
+   "policy": "STRICT_INSIDE"
+  },
+  {
+   "kind": "plan_repeat_positive",
+   "policy": "STRICT_INSIDE"
+  },
+  {
+   "kind": "plan_turnaround_verified_at_node",
+   "policy": "STRICT_INSIDE",
+   "nodeId": "osm:n4"
+  }
+ ],
+ "tolerances": {
+  "offsetMeters": 0.5,
+  "totalsMeters": 1
+ }
+}

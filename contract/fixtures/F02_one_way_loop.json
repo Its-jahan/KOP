@@ -1,0 +1,228 @@
+{
+ "fixtureId": "F02_one_way_loop",
+ "title": "One-way loop",
+ "description": "No reverse edge is invented and no wrong-way instruction is produced.",
+ "contractVersion": "1.0.0",
+ "kind": "graph",
+ "input": {
+  "osm": {
+   "osm3s": {
+    "timestamp_osm_base": "fixture"
+   },
+   "elements": [
+    {
+     "type": "node",
+     "id": 1,
+     "lat": 40.18,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 2,
+     "lat": 40.18,
+     "lon": 44.5011758
+    },
+    {
+     "type": "node",
+     "id": 3,
+     "lat": 40.1790956,
+     "lon": 44.5011758
+    },
+    {
+     "type": "node",
+     "id": 4,
+     "lat": 40.1790956,
+     "lon": 44.5
+    },
+    {
+     "type": "way",
+     "id": 11,
+     "nodes": [
+      1,
+      2
+     ],
+     "tags": {
+      "highway": "residential",
+      "oneway": "yes"
+     }
+    },
+    {
+     "type": "way",
+     "id": 12,
+     "nodes": [
+      2,
+      3
+     ],
+     "tags": {
+      "highway": "residential",
+      "oneway": "yes"
+     }
+    },
+    {
+     "type": "way",
+     "id": 13,
+     "nodes": [
+      3,
+      4
+     ],
+     "tags": {
+      "highway": "residential",
+      "oneway": "yes"
+     }
+    },
+    {
+     "type": "way",
+     "id": 14,
+     "nodes": [
+      4,
+      1
+     ],
+     "tags": {
+      "highway": "residential",
+      "oneway": "yes"
+     }
+    }
+   ]
+  },
+  "zone": {
+   "type": "polygon",
+   "coordinates": [
+    [
+     44.4994121,
+     40.1786434
+    ],
+    [
+     44.5017637,
+     40.1786434
+    ],
+    [
+     44.5017637,
+     40.1804522
+    ],
+    [
+     44.4994121,
+     40.1804522
+    ]
+   ]
+  },
+  "policies": [
+   "STRICT_INSIDE"
+  ],
+  "start": {
+   "edgeId": "osm:w11:n1-n2:f",
+   "offsetMeters": 0
+  }
+ },
+ "expected": {
+  "graph": {
+   "contentHash": "41f009fee9dac1688b372ee37be2d04e99a1e7e001e70541f923ce659450dc8f",
+   "graphId": "g-41f009fee9dac168",
+   "nodeCount": 4,
+   "edgeCount": 4,
+   "restrictionCount": 0,
+   "edgeIds": [
+    "osm:w11:n1-n2:f",
+    "osm:w12:n2-n3:f",
+    "osm:w13:n3-n4:f",
+    "osm:w14:n4-n1:f"
+   ],
+   "eligibility": {
+    "osm:w11:n1-n2:f": "eligible",
+    "osm:w12:n2-n3:f": "eligible",
+    "osm:w13:n3-n4:f": "eligible",
+    "osm:w14:n4-n1:f": "eligible"
+   },
+   "eligibilityReason": {},
+   "nodePassage": {},
+   "restrictions": []
+  },
+  "requirements": [
+   {
+    "requirementId": "osm:w11:n1-n2:f#0",
+    "edgeId": "osm:w11:n1-n2:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w12:n2-n3:f#0",
+    "edgeId": "osm:w12:n2-n3:f",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w13:n3-n4:f#0",
+    "edgeId": "osm:w13:n3-n4:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w14:n4-n1:f#0",
+    "edgeId": "osm:w14:n4-n1:f",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   }
+  ],
+  "plans": {
+   "STRICT_INSIDE": {
+    "status": "complete",
+    "edgeSequence": [
+     "osm:w11:n1-n2:f",
+     "osm:w12:n2-n3:f",
+     "osm:w13:n3-n4:f",
+     "osm:w14:n4-n1:f"
+    ],
+    "stepKinds": [
+     "required",
+     "required",
+     "required",
+     "required"
+    ],
+    "turnarounds": [],
+    "coveredRequirementIds": [
+     "osm:w11:n1-n2:f#0",
+     "osm:w12:n2-n3:f#0",
+     "osm:w13:n3-n4:f#0",
+     "osm:w14:n4-n1:f#0"
+    ],
+    "unreachable": [],
+    "totals": {
+     "totalMeters": 400.9,
+     "newCoverageMeters": 400.9,
+     "repeatMeters": 0,
+     "outsideMeters": 0,
+     "approachMeters": 0
+    },
+    "valid": true,
+    "validationErrors": []
+   }
+  },
+  "paths": {},
+  "tracks": {}
+ },
+ "assertions": [
+  {
+   "kind": "edge_count",
+   "count": 4
+  },
+  {
+   "kind": "no_edge_with_suffix",
+   "suffix": ":b"
+  },
+  {
+   "kind": "plan_covers_all",
+   "policy": "STRICT_INSIDE"
+  },
+  {
+   "kind": "plan_has_no_turnaround",
+   "policy": "STRICT_INSIDE"
+  }
+ ],
+ "tolerances": {
+  "offsetMeters": 0.5,
+  "totalsMeters": 1
+ }
+}

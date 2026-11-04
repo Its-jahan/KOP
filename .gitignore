@@ -1,0 +1,14 @@
+node_modules/
+dist/
+web/test-results/
+web/playwright-report/
+.vercel/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.keystore
+*.jks
+.env
+.env.*
+!.env.example

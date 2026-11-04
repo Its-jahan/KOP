@@ -1,0 +1,448 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://della-navigator.local/contract/1.0.0/coverage-contract.schema.json",
+  "title": "Coverage Navigator Shared Contract 1.0.0",
+  "description": "Frozen interchange contract for the Android and web coverage navigators. Units: meters, milliseconds since Unix epoch, WGS84 degrees [lon, lat]. All identifiers are language independent ASCII strings.",
+  "$defs": {
+    "lonLat": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "number", "minimum": -180, "maximum": 180 },
+        { "type": "number", "minimum": -90, "maximum": 90 }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "nullableString": { "type": ["string", "null"] },
+    "eligibility": { "enum": ["eligible", "excluded", "needsReview"] },
+    "boundaryPolicy": { "enum": ["STRICT_INSIDE", "ALLOW_NECESSARY_CONNECTORS"] },
+    "dataState": {
+      "enum": ["not_configured", "credentials_missing", "entitlement_unverified", "area_unsupported", "fetching", "available", "stale", "incomplete", "failed", "synthetic_test_fixture"]
+    },
+    "requirementStatus": { "enum": ["unvisited", "partial", "covered", "blocked", "unreachable", "needsReview"] },
+    "stepKind": { "enum": ["required", "transit", "outside", "approach"] },
+    "graphNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "position", "passage", "barrier", "turnaround", "sourceIds"],
+      "properties": {
+        "nodeId": { "type": "string", "minLength": 1 },
+        "position": { "$ref": "#/$defs/lonLat" },
+        "passage": { "enum": ["free", "blocked", "unverified"] },
+        "barrier": { "$ref": "#/$defs/nullableString" },
+        "turnaround": { "enum": ["turning_circle", "turning_loop", "none"] },
+        "sourceIds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "vehicleLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxWidthCm", "maxHeightCm", "maxWeightKg"],
+      "properties": {
+        "maxWidthCm": { "type": ["integer", "null"], "minimum": 0 },
+        "maxHeightCm": { "type": ["integer", "null"], "minimum": 0 },
+        "maxWeightKg": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "directedEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edgeId", "physicalSegmentId", "fromNodeId", "toNodeId", "geometry", "lengthMeters", "lengthMm", "directionIdentity", "reciprocalEdgeId", "sourceFeatureIds", "names", "surface", "roadClass", "motorVehicleAccess", "conditionalAccess", "barriers", "vehicleLimits", "eligibility", "eligibilityReason", "dataConfidence", "provenance"],
+      "properties": {
+        "edgeId": { "type": "string", "minLength": 1 },
+        "physicalSegmentId": { "type": "string", "minLength": 1 },
+        "fromNodeId": { "type": "string" },
+        "toNodeId": { "type": "string" },
+        "geometry": { "type": "array", "items": { "$ref": "#/$defs/lonLat" }, "minItems": 2 },
+        "lengthMeters": { "type": "number", "exclusiveMinimum": 0 },
+        "lengthMm": { "type": "integer", "exclusiveMinimum": 0 },
+        "directionIdentity": { "enum": ["forward", "backward"] },
+        "reciprocalEdgeId": { "$ref": "#/$defs/nullableString" },
+        "sourceFeatureIds": { "type": "array", "items": { "type": "string" } },
+        "names": { "type": "object", "additionalProperties": { "type": "string" } },
+        "surface": { "$ref": "#/$defs/nullableString" },
+        "roadClass": { "type": "string" },
+        "motorVehicleAccess": { "type": "string" },
+        "conditionalAccess": { "$ref": "#/$defs/nullableString" },
+        "barriers": { "type": "array", "items": { "type": "string" } },
+        "vehicleLimits": { "$ref": "#/$defs/vehicleLimits" },
+        "eligibility": { "$ref": "#/$defs/eligibility" },
+        "eligibilityReason": { "$ref": "#/$defs/nullableString" },
+        "dataConfidence": { "enum": ["high", "medium", "low"] },
+        "provenance": { "type": "string" }
+      }
+    },
+    "turnRestriction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["restrictionId", "kind", "sourceType", "fromEdgeId", "viaNodeId", "viaEdgeIds", "toEdgeId", "appliesTo", "condition", "provenance"],
+      "properties": {
+        "restrictionId": { "type": "string" },
+        "kind": { "enum": ["no", "only"] },
+        "sourceType": { "type": "string" },
+        "fromEdgeId": { "type": "string" },
+        "viaNodeId": { "$ref": "#/$defs/nullableString" },
+        "viaEdgeIds": { "type": "array", "items": { "type": "string" } },
+        "toEdgeId": { "type": "string" },
+        "appliesTo": { "type": "array", "items": { "const": "passenger_car" } },
+        "condition": { "$ref": "#/$defs/nullableString" },
+        "provenance": { "type": "string" }
+      }
+    },
+    "graphSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "graphId", "contentHash", "providerId", "normalizerVersion", "sourceDatasetVersion", "fetchedAt", "geographicExtent", "coordinateReferenceSystem", "attribution", "capabilities", "freshness", "completenessNotes", "dataState", "vehicleProfile", "nodes", "directedEdges", "turnRestrictions"],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "graphId": { "type": "string", "pattern": "^g-[0-9a-f]{16}$" },
+        "contentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "providerId": { "type": "string" },
+        "normalizerVersion": { "type": "string" },
+        "sourceDatasetVersion": { "type": "string" },
+        "fetchedAt": { "type": "string" },
+        "geographicExtent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["west", "south", "east", "north"],
+          "properties": { "west": { "type": "number" }, "south": { "type": "number" }, "east": { "type": "number" }, "north": { "type": "number" } }
+        },
+        "coordinateReferenceSystem": { "const": "EPSG:4326" },
+        "attribution": { "type": "string", "minLength": 1 },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["turnRestrictions", "viaWayRestrictions", "conditionalRestrictions", "barriers", "turnaroundData", "liveClosures", "traffic"],
+          "properties": {
+            "turnRestrictions": { "type": "boolean" },
+            "viaWayRestrictions": { "type": "boolean" },
+            "conditionalRestrictions": { "const": "applied_conservatively" },
+            "barriers": { "type": "boolean" },
+            "turnaroundData": { "type": "boolean" },
+            "liveClosures": { "type": "boolean" },
+            "traffic": { "type": "boolean" }
+          }
+        },
+        "freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceTimestamp", "note"],
+          "properties": { "sourceTimestamp": { "type": "string" }, "note": { "type": "string" } }
+        },
+        "completenessNotes": { "type": "array", "items": { "type": "string" } },
+        "dataState": { "$ref": "#/$defs/dataState" },
+        "vehicleProfile": { "const": "passenger_car" },
+        "nodes": { "type": "array", "items": { "$ref": "#/$defs/graphNode" } },
+        "directedEdges": { "type": "array", "items": { "$ref": "#/$defs/directedEdge" } },
+        "turnRestrictions": { "type": "array", "items": { "$ref": "#/$defs/turnRestriction" } }
+      }
+    },
+    "zoneDefinition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "coordinates"],
+          "properties": {
+            "type": { "const": "polygon" },
+            "coordinates": { "type": "array", "items": { "$ref": "#/$defs/lonLat" }, "minItems": 3 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "center", "radiusMeters"],
+          "properties": {
+            "type": { "const": "circle" },
+            "center": { "$ref": "#/$defs/lonLat" },
+            "radiusMeters": { "type": "number", "exclusiveMinimum": 0 },
+            "approximation": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["vertices", "toleranceMeters", "coordinates"],
+              "properties": {
+                "vertices": { "type": "integer", "minimum": 16 },
+                "toleranceMeters": { "type": "number", "minimum": 0 },
+                "coordinates": { "type": "array", "items": { "$ref": "#/$defs/lonLat" }, "minItems": 16 }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "zone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zoneId", "zoneVersion", "definition"],
+      "properties": {
+        "zoneId": { "type": "string" },
+        "zoneVersion": { "type": "integer", "minimum": 1 },
+        "definition": { "$ref": "#/$defs/zoneDefinition" }
+      }
+    },
+    "requiredInterval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirementId", "edgeId", "startOffsetMeters", "endOffsetMeters", "lengthMeters", "status", "exclusionReason"],
+      "properties": {
+        "requirementId": { "type": "string" },
+        "edgeId": { "type": "string" },
+        "startOffsetMeters": { "type": "number", "minimum": 0 },
+        "endOffsetMeters": { "type": "number", "minimum": 0 },
+        "lengthMeters": { "type": "number", "exclusiveMinimum": 0 },
+        "status": { "$ref": "#/$defs/requirementStatus" },
+        "exclusionReason": { "$ref": "#/$defs/nullableString" }
+      }
+    },
+    "locationObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observationId", "timestamp", "monotonicMs", "lon", "lat", "horizontalAccuracyMeters", "speedMps", "speedAccuracyMps", "bearingDeg", "bearingAccuracyDeg", "altitudeMeters", "altitudeAccuracyMeters", "source", "ageMs"],
+      "properties": {
+        "observationId": { "type": "string" },
+        "timestamp": { "type": "integer" },
+        "monotonicMs": { "type": ["number", "null"] },
+        "lon": { "type": "number", "minimum": -180, "maximum": 180 },
+        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+        "horizontalAccuracyMeters": { "type": ["number", "null"], "minimum": 0 },
+        "speedMps": { "type": ["number", "null"], "minimum": 0 },
+        "speedAccuracyMps": { "type": ["number", "null"], "minimum": 0 },
+        "bearingDeg": { "type": ["number", "null"], "minimum": 0, "maximum": 360 },
+        "bearingAccuracyDeg": { "type": ["number", "null"], "minimum": 0 },
+        "altitudeMeters": { "type": ["number", "null"] },
+        "altitudeAccuracyMeters": { "type": ["number", "null"], "minimum": 0 },
+        "source": { "enum": ["gps", "network", "fused", "browser", "simulated_test"] },
+        "ageMs": { "type": ["number", "null"] }
+      }
+    },
+    "matchedTraversal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["traversalId", "observationIds", "edgeId", "startOffsetMeters", "endOffsetMeters", "confidence", "evidence", "timestampStart", "timestampEnd", "manuallyReviewed"],
+      "properties": {
+        "traversalId": { "type": "string" },
+        "observationIds": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "edgeId": { "type": "string" },
+        "startOffsetMeters": { "type": "number", "minimum": 0 },
+        "endOffsetMeters": { "type": "number", "minimum": 0 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence": { "enum": ["continuous", "junction_interpolated"] },
+        "timestampStart": { "type": "number" },
+        "timestampEnd": { "type": "number" },
+        "manuallyReviewed": { "type": "boolean" }
+      }
+    },
+    "planStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edgeId", "fromOffsetMeters", "toOffsetMeters", "kind", "newlyCoveredRequirementIds", "outsideMeters", "turnaroundAtStart"],
+      "properties": {
+        "edgeId": { "type": "string" },
+        "fromOffsetMeters": { "type": "number", "minimum": 0 },
+        "toOffsetMeters": { "type": "number", "minimum": 0 },
+        "kind": { "$ref": "#/$defs/stepKind" },
+        "newlyCoveredRequirementIds": { "type": "array", "items": { "type": "string" } },
+        "outsideMeters": { "type": "number", "minimum": 0 },
+        "turnaroundAtStart": { "enum": ["verified", "unverified", null] }
+      }
+    },
+    "routePlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["planId", "graphHash", "zoneVersion", "basedOnProgressRevision", "planningRevision", "algorithm", "algorithmVersion", "createdAt", "startState", "steps", "legs", "coveredRequirementIds", "unreachable", "totals", "limits", "warnings", "status"],
+      "properties": {
+        "planId": { "type": "string" },
+        "graphHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "zoneVersion": { "type": "integer" },
+        "basedOnProgressRevision": { "type": "integer", "minimum": 0 },
+        "planningRevision": { "type": "integer", "minimum": 0 },
+        "algorithm": { "type": "string" },
+        "algorithmVersion": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "startState": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["edgeId", "offsetMeters", "source"],
+          "properties": {
+            "edgeId": { "type": "string" },
+            "offsetMeters": { "type": "number", "minimum": 0 },
+            "source": { "enum": ["selected_start", "gps_position"] }
+          }
+        },
+        "steps": { "type": "array", "items": { "$ref": "#/$defs/planStep" } },
+        "legs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "firstStep", "lastStep", "lengthMeters"],
+            "properties": {
+              "kind": { "$ref": "#/$defs/stepKind" },
+              "firstStep": { "type": "integer", "minimum": 0 },
+              "lastStep": { "type": "integer", "minimum": 0 },
+              "lengthMeters": { "type": "number", "minimum": 0 }
+            }
+          }
+        },
+        "coveredRequirementIds": { "type": "array", "items": { "type": "string" } },
+        "unreachable": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["requirementId", "cause"],
+            "properties": {
+              "requirementId": { "type": "string" },
+              "cause": { "enum": ["outside_policy", "not_reachable_from_start", "needs_review", "blocked_by_user", "budget_exceeded"] }
+            }
+          }
+        },
+        "totals": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["totalMeters", "newCoverageMeters", "repeatMeters", "outsideMeters", "approachMeters"],
+          "properties": {
+            "totalMeters": { "type": "number", "minimum": 0 },
+            "newCoverageMeters": { "type": "number", "minimum": 0 },
+            "repeatMeters": { "type": "number", "minimum": 0 },
+            "outsideMeters": { "type": "number", "minimum": 0 },
+            "approachMeters": { "type": "number", "minimum": 0 }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maxIterations", "timeBudgetMs", "iterationsUsed"],
+          "properties": {
+            "maxIterations": { "type": "integer" },
+            "timeBudgetMs": { "type": "number" },
+            "iterationsUsed": { "type": "integer" }
+          }
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "status": { "enum": ["complete", "partial", "cancelled", "failed", "no_requirements"] }
+      }
+    },
+    "exclusionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requirementId", "reason", "note", "at", "active"],
+      "properties": {
+        "requirementId": { "type": "string" },
+        "reason": { "enum": ["blocked", "inaccessible", "uncertain"] },
+        "note": { "$ref": "#/$defs/nullableString" },
+        "at": { "type": "number" },
+        "active": { "type": "boolean" }
+      }
+    },
+    "coverageSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "sessionId", "graphId", "contentHash", "zone", "vehicleProfile", "boundaryPolicy", "returnToStart", "startSelection", "createdAt", "status", "planningRevision", "progressRevision", "requiredIntervals", "confirmedTraversals", "exclusions", "routePlan", "eventLogPosition"],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "sessionId": { "type": "string", "minLength": 1 },
+        "graphId": { "type": "string" },
+        "contentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "zone": { "$ref": "#/$defs/zone" },
+        "vehicleProfile": { "const": "passenger_car" },
+        "boundaryPolicy": { "$ref": "#/$defs/boundaryPolicy" },
+        "returnToStart": { "type": "boolean" },
+        "startSelection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requested", "snapped", "confirmed"],
+          "properties": {
+            "requested": { "$ref": "#/$defs/lonLat" },
+            "snapped": {
+              "oneOf": [
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["edgeId", "offsetMeters", "position", "distanceMeters"],
+                  "properties": {
+                    "edgeId": { "type": "string" },
+                    "offsetMeters": { "type": "number", "minimum": 0 },
+                    "position": { "$ref": "#/$defs/lonLat" },
+                    "distanceMeters": { "type": "number", "minimum": 0 }
+                  }
+                }
+              ]
+            },
+            "confirmed": { "type": "boolean" }
+          }
+        },
+        "createdAt": { "type": "string" },
+        "status": { "enum": ["preparing", "ready", "active", "paused", "ended"] },
+        "planningRevision": { "type": "integer", "minimum": 0 },
+        "progressRevision": { "type": "integer", "minimum": 0 },
+        "requiredIntervals": { "type": "array", "items": { "$ref": "#/$defs/requiredInterval" } },
+        "confirmedTraversals": { "type": "array", "items": { "$ref": "#/$defs/matchedTraversal" } },
+        "exclusions": { "type": "array", "items": { "$ref": "#/$defs/exclusionRecord" } },
+        "routePlan": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/routePlan" }] },
+        "eventLogPosition": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sessionEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "seq", "sessionId", "type", "timestamp", "schemaVersion", "payload"],
+      "properties": {
+        "eventId": { "type": "string", "minLength": 1 },
+        "seq": { "type": "integer", "minimum": 1 },
+        "sessionId": { "type": "string" },
+        "type": { "enum": ["session_created", "start_confirmed", "plan_accepted", "observation", "traversal_confirmed", "gap_recorded", "requirement_excluded", "requirement_restored", "paused", "resumed", "ended"] },
+        "timestamp": { "type": "number" },
+        "schemaVersion": { "const": "1.0.0" },
+        "payload": { "type": "object" }
+      }
+    },
+    "sessionExportPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packageType", "contractVersion", "exportedAt", "exporter", "graphRef", "graph", "session", "events", "diagnostics"],
+      "properties": {
+        "packageType": { "const": "coverage-session-export" },
+        "contractVersion": { "const": "1.0.0" },
+        "exportedAt": { "type": "string" },
+        "exporter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["platform", "appVersion"],
+          "properties": { "platform": { "enum": ["web", "android"] }, "appVersion": { "type": "string" } }
+        },
+        "graphRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["graphId", "contentHash", "providerId", "normalizerVersion", "sourceDatasetVersion", "attribution"],
+          "properties": {
+            "graphId": { "type": "string" },
+            "contentHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "providerId": { "type": "string" },
+            "normalizerVersion": { "type": "string" },
+            "sourceDatasetVersion": { "type": "string" },
+            "attribution": { "type": "string" }
+          }
+        },
+        "graph": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/graphSnapshot" }] },
+        "session": { "$ref": "#/$defs/coverageSession" },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/sessionEvent" } },
+        "diagnostics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["observationsIncluded", "gapCount", "notes"],
+          "properties": {
+            "observationsIncluded": { "type": "boolean" },
+            "gapCount": { "type": "integer", "minimum": 0 },
+            "notes": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/sessionExportPackage" },
+    { "$ref": "#/$defs/graphSnapshot" }
+  ]
+}

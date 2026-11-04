@@ -1,0 +1,146 @@
+{
+ "fixtureId": "F16_failure_states",
+ "title": "Permission, location, key, quota, area and network failures",
+ "description": "Clear non-success states; navigation cannot start.",
+ "contractVersion": "1.0.0",
+ "kind": "mapFailure",
+ "cases": [
+  {
+   "input": {
+    "kind": "location_permission_denied"
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": "permission_denied",
+    "dataState": null,
+    "code": "gps_permission_denied"
+   }
+  },
+  {
+   "input": {
+    "kind": "location_disabled"
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": "location_disabled",
+    "dataState": null,
+    "code": "gps_disabled"
+   }
+  },
+  {
+   "input": {
+    "kind": "location_unavailable"
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": "acquiring",
+    "dataState": null,
+    "code": "gps_unavailable"
+   }
+  },
+  {
+   "input": {
+    "kind": "location_timeout"
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": "acquiring",
+    "dataState": null,
+    "code": "gps_timeout"
+   }
+  },
+  {
+   "input": {
+    "kind": "credentials_missing"
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": null,
+    "dataState": "credentials_missing",
+    "code": "credentials_missing"
+   }
+  },
+  {
+   "input": {
+    "kind": "provider_not_configured"
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": null,
+    "dataState": "not_configured",
+    "code": "provider_not_configured"
+   }
+  },
+  {
+   "input": {
+    "kind": "graph_http",
+    "status": 429
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": null,
+    "dataState": "failed",
+    "code": "provider_quota_exceeded"
+   }
+  },
+  {
+   "input": {
+    "kind": "graph_http",
+    "status": 403
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": null,
+    "dataState": "credentials_missing",
+    "code": "provider_auth"
+   }
+  },
+  {
+   "input": {
+    "kind": "graph_http",
+    "status": 504
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": null,
+    "dataState": "failed",
+    "code": "provider_timeout"
+   }
+  },
+  {
+   "input": {
+    "kind": "graph_network_error"
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": null,
+    "dataState": "failed",
+    "code": "network_unavailable"
+   }
+  },
+  {
+   "input": {
+    "kind": "graph_empty"
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": null,
+    "dataState": "area_unsupported",
+    "code": "no_roads_in_area"
+   }
+  },
+  {
+   "input": {
+    "kind": "graph_too_large",
+    "edges": 90000,
+    "limit": 60000
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": null,
+    "dataState": "incomplete",
+    "code": "graph_exceeds_tested_limit"
+   }
+  }
+ ]
+}

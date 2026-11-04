@@ -1,0 +1,721 @@
+{
+ "fixtureId": "F09_partial_overlap_duplicates",
+ "title": "Partial edge, overlapping passes and duplicates",
+ "description": "Union is correct and idempotent; partial traversal earns partial length only.",
+ "contractVersion": "1.0.0",
+ "kind": "graph",
+ "input": {
+  "osm": {
+   "osm3s": {
+    "timestamp_osm_base": "fixture"
+   },
+   "elements": [
+    {
+     "type": "node",
+     "id": 1,
+     "lat": 40.18,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 2,
+     "lat": 40.18,
+     "lon": 44.5035273
+    },
+    {
+     "type": "way",
+     "id": 80,
+     "nodes": [
+      1,
+      2
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    }
+   ]
+  },
+  "zone": {
+   "type": "polygon",
+   "coordinates": [
+    [
+     44.4994121,
+     40.1795478
+    ],
+    [
+     44.5041152,
+     40.1795478
+    ],
+    [
+     44.5041152,
+     40.1804522
+    ],
+    [
+     44.4994121,
+     40.1804522
+    ]
+   ]
+  },
+  "policies": [],
+  "start": null,
+  "tracks": [
+   {
+    "name": "two_passes_with_duplicates",
+    "observations": [
+     {
+      "observationId": "a0",
+      "timestamp": 1700000000000,
+      "monotonicMs": null,
+      "lon": 44.5,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a1",
+      "timestamp": 1700000001000,
+      "monotonicMs": null,
+      "lon": 44.5001176,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a2",
+      "timestamp": 1700000002000,
+      "monotonicMs": null,
+      "lon": 44.5002352,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a3",
+      "timestamp": 1700000003000,
+      "monotonicMs": null,
+      "lon": 44.5003527,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a4",
+      "timestamp": 1700000004000,
+      "monotonicMs": null,
+      "lon": 44.5004703,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a5",
+      "timestamp": 1700000005000,
+      "monotonicMs": null,
+      "lon": 44.5005879,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a6",
+      "timestamp": 1700000006000,
+      "monotonicMs": null,
+      "lon": 44.5007055,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a7",
+      "timestamp": 1700000007000,
+      "monotonicMs": null,
+      "lon": 44.500823,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a8",
+      "timestamp": 1700000008000,
+      "monotonicMs": null,
+      "lon": 44.5009406,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a9",
+      "timestamp": 1700000009000,
+      "monotonicMs": null,
+      "lon": 44.5010582,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a10",
+      "timestamp": 1700000010000,
+      "monotonicMs": null,
+      "lon": 44.5011758,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a11",
+      "timestamp": 1700000011000,
+      "monotonicMs": null,
+      "lon": 44.5012933,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a12",
+      "timestamp": 1700000012000,
+      "monotonicMs": null,
+      "lon": 44.5014109,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a3",
+      "timestamp": 1700000003000,
+      "monotonicMs": null,
+      "lon": 44.5003527,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a4",
+      "timestamp": 1700000004000,
+      "monotonicMs": null,
+      "lon": 44.5004703,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "a5",
+      "timestamp": 1700000005000,
+      "monotonicMs": null,
+      "lon": 44.5005879,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b0",
+      "timestamp": 1700000060000,
+      "monotonicMs": null,
+      "lon": 44.5009406,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b1",
+      "timestamp": 1700000061000,
+      "monotonicMs": null,
+      "lon": 44.5010582,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b2",
+      "timestamp": 1700000062000,
+      "monotonicMs": null,
+      "lon": 44.5011758,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b3",
+      "timestamp": 1700000063000,
+      "monotonicMs": null,
+      "lon": 44.5012933,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b4",
+      "timestamp": 1700000064000,
+      "monotonicMs": null,
+      "lon": 44.5014109,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b5",
+      "timestamp": 1700000065000,
+      "monotonicMs": null,
+      "lon": 44.5015285,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b6",
+      "timestamp": 1700000066000,
+      "monotonicMs": null,
+      "lon": 44.5016461,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b7",
+      "timestamp": 1700000067000,
+      "monotonicMs": null,
+      "lon": 44.5017637,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b8",
+      "timestamp": 1700000068000,
+      "monotonicMs": null,
+      "lon": 44.5018812,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b9",
+      "timestamp": 1700000069000,
+      "monotonicMs": null,
+      "lon": 44.5019988,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b10",
+      "timestamp": 1700000070000,
+      "monotonicMs": null,
+      "lon": 44.5021164,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b11",
+      "timestamp": 1700000071000,
+      "monotonicMs": null,
+      "lon": 44.502234,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b12",
+      "timestamp": 1700000072000,
+      "monotonicMs": null,
+      "lon": 44.5023515,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b0",
+      "timestamp": 1700000060000,
+      "monotonicMs": null,
+      "lon": 44.5009406,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b1",
+      "timestamp": 1700000061000,
+      "monotonicMs": null,
+      "lon": 44.5010582,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b2",
+      "timestamp": 1700000062000,
+      "monotonicMs": null,
+      "lon": 44.5011758,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     },
+     {
+      "observationId": "b3",
+      "timestamp": 1700000063000,
+      "monotonicMs": null,
+      "lon": 44.5012933,
+      "lat": 40.18,
+      "horizontalAccuracyMeters": 5,
+      "speedMps": 10,
+      "speedAccuracyMps": null,
+      "bearingDeg": 90,
+      "bearingAccuracyDeg": null,
+      "altitudeMeters": null,
+      "altitudeAccuracyMeters": null,
+      "source": "simulated_test",
+      "ageMs": 0
+     }
+    ]
+   }
+  ]
+ },
+ "expected": {
+  "graph": {
+   "contentHash": "da29cebfdd7407c5e32f3ec62285efa0e9898f3d189232fd87ba1c9f566f2af5",
+   "graphId": "g-da29cebfdd7407c5",
+   "nodeCount": 2,
+   "edgeCount": 2,
+   "restrictionCount": 0,
+   "edgeIds": [
+    "osm:w80:n1-n2:b",
+    "osm:w80:n1-n2:f"
+   ],
+   "eligibility": {
+    "osm:w80:n1-n2:b": "eligible",
+    "osm:w80:n1-n2:f": "eligible"
+   },
+   "eligibilityReason": {},
+   "nodePassage": {},
+   "restrictions": []
+  },
+  "requirements": [
+   {
+    "requirementId": "osm:w80:n1-n2:b#0",
+    "edgeId": "osm:w80:n1-n2:b",
+    "start": 0,
+    "end": 299.66,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w80:n1-n2:f#0",
+    "edgeId": "osm:w80:n1-n2:f",
+    "start": 0,
+    "end": 299.66,
+    "status": "unvisited"
+   }
+  ],
+  "plans": {},
+  "paths": {},
+  "tracks": {
+   "two_passes_with_duplicates": {
+    "unionByEdge": {
+     "osm:w80:n1-n2:f": [
+      [
+       0,
+       199.77
+      ]
+     ]
+    },
+    "traversalCount": 22,
+    "qualities": [
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable",
+     "reliable"
+    ],
+    "gaps": [
+     "16:gap"
+    ],
+    "ignored": [
+     "13:duplicate",
+     "14:duplicate",
+     "15:duplicate",
+     "29:duplicate",
+     "30:duplicate",
+     "31:duplicate",
+     "32:duplicate"
+    ],
+    "deviationAt": null,
+    "replan": null
+   }
+  }
+ },
+ "assertions": [
+  {
+   "kind": "edge_covered_between",
+   "track": "two_passes_with_duplicates",
+   "edgeId": "osm:w80:n1-n2:f",
+   "min": 190,
+   "max": 201
+  },
+  {
+   "kind": "edge_covered_at_most",
+   "track": "two_passes_with_duplicates",
+   "edgeId": "osm:w80:n1-n2:b",
+   "meters": 0
+  },
+  {
+   "kind": "ignored_count_at_least",
+   "track": "two_passes_with_duplicates",
+   "count": 7
+  }
+ ],
+ "tolerances": {
+  "offsetMeters": 0.5,
+  "totalsMeters": 1
+ }
+}

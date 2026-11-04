@@ -1,0 +1,39 @@
+[
+ {
+  "input": {
+   "b": 1,
+   "a": [
+    true,
+    false,
+    null
+   ],
+   "c": "x"
+  },
+  "canonical": "{\"a\":[true,false,null],\"b\":1,\"c\":\"x\"}",
+  "sha256": "210bd8e5501c622e789c4b9e6cd70edbfbe598f4725066bac3c1ffe0176ff0e3"
+ },
+ {
+  "input": {
+   "name": "Աբովյան փողոց",
+   "fa": "خیابان",
+   "esc": "q\"\\\n\t\u0001",
+   "emoji": "🚗"
+  },
+  "canonical": "{\"emoji\":\"🚗\",\"esc\":\"q\\\"\\\\\\n\\t\\u0001\",\"fa\":\"خیابان\",\"name\":\"Աբովյան փողոց\"}",
+  "sha256": "9018957a577e4e1f0aa4d63e7a5bd791ab23cb71c18df8474d923d927574a351"
+ },
+ {
+  "input": {
+   "nested": {
+    "z": 1,
+    "y": {
+     "b": -2,
+     "a": 0
+    }
+   },
+   "big": 9007199254740991
+  },
+  "canonical": "{\"big\":9007199254740991,\"nested\":{\"y\":{\"a\":0,\"b\":-2},\"z\":1}}",
+  "sha256": "5e327cad82d7c4f1b34f05bc34e61ddd8db98b7da45e9b8b7e6f15cc43a208e9"
+ }
+]

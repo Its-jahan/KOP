@@ -1,0 +1,891 @@
+{
+ "fixtureId": "F17_portable_roundtrip",
+ "title": "Portable Android/web import/export",
+ "description": "Directions, partial intervals, exclusions, graph fingerprint and progress remain unchanged through export -> import -> re-export.",
+ "contractVersion": "1.0.0",
+ "kind": "portable",
+ "referencePackage": {
+  "packageType": "coverage-session-export",
+  "contractVersion": "1.0.0",
+  "exportedAt": "1970-01-01T00:00:00.000Z",
+  "exporter": {
+   "platform": "web",
+   "appVersion": "0.1.0"
+  },
+  "graphRef": {
+   "graphId": "g-da29cebfdd7407c5",
+   "contentHash": "da29cebfdd7407c5e32f3ec62285efa0e9898f3d189232fd87ba1c9f566f2af5",
+   "providerId": "fixture",
+   "normalizerVersion": "osm-normalizer-1.0.0",
+   "sourceDatasetVersion": "fixture",
+   "attribution": "© OpenStreetMap contributors (ODbL 1.0)"
+  },
+  "graph": {
+   "schemaVersion": "1.0.0",
+   "graphId": "g-da29cebfdd7407c5",
+   "contentHash": "da29cebfdd7407c5e32f3ec62285efa0e9898f3d189232fd87ba1c9f566f2af5",
+   "providerId": "fixture",
+   "normalizerVersion": "osm-normalizer-1.0.0",
+   "sourceDatasetVersion": "fixture",
+   "fetchedAt": "1970-01-01T00:00:00.000Z",
+   "geographicExtent": {
+    "west": 44.5,
+    "south": 40.18,
+    "east": 44.5035273,
+    "north": 40.18
+   },
+   "coordinateReferenceSystem": "EPSG:4326",
+   "attribution": "© OpenStreetMap contributors (ODbL 1.0)",
+   "capabilities": {
+    "turnRestrictions": true,
+    "viaWayRestrictions": true,
+    "conditionalRestrictions": "applied_conservatively",
+    "barriers": true,
+    "turnaroundData": true,
+    "liveClosures": false,
+    "traffic": false
+   },
+   "freshness": {
+    "sourceTimestamp": "fixture",
+    "note": "OSM replication timestamp reported by the Overpass server."
+   },
+   "completenessNotes": [
+    "OpenStreetMap data may be incomplete or outdated; field verification is required.",
+    "Live closures and traffic are not available from this source.",
+    "Conditional turn restrictions are applied at all times (conservative)."
+   ],
+   "dataState": "synthetic_test_fixture",
+   "vehicleProfile": "passenger_car",
+   "nodes": [
+    {
+     "nodeId": "osm:n1",
+     "position": [
+      44.5,
+      40.18
+     ],
+     "passage": "free",
+     "barrier": null,
+     "turnaround": "none",
+     "sourceIds": [
+      "node/1"
+     ]
+    },
+    {
+     "nodeId": "osm:n2",
+     "position": [
+      44.5035273,
+      40.18
+     ],
+     "passage": "free",
+     "barrier": null,
+     "turnaround": "none",
+     "sourceIds": [
+      "node/2"
+     ]
+    }
+   ],
+   "directedEdges": [
+    {
+     "physicalSegmentId": "osm:w80:n1-n2",
+     "lengthMeters": 299.663,
+     "lengthMm": 299663,
+     "sourceFeatureIds": [
+      "way/80"
+     ],
+     "names": {},
+     "surface": null,
+     "roadClass": "residential",
+     "motorVehicleAccess": "default",
+     "conditionalAccess": null,
+     "barriers": [],
+     "vehicleLimits": {
+      "maxWidthCm": null,
+      "maxHeightCm": null,
+      "maxWeightKg": null
+     },
+     "eligibility": "eligible",
+     "eligibilityReason": null,
+     "dataConfidence": "high",
+     "provenance": "osm way/80",
+     "edgeId": "osm:w80:n1-n2:b",
+     "fromNodeId": "osm:n2",
+     "toNodeId": "osm:n1",
+     "geometry": [
+      [
+       44.5035273,
+       40.18
+      ],
+      [
+       44.5,
+       40.18
+      ]
+     ],
+     "directionIdentity": "backward",
+     "reciprocalEdgeId": "osm:w80:n1-n2:f"
+    },
+    {
+     "physicalSegmentId": "osm:w80:n1-n2",
+     "lengthMeters": 299.663,
+     "lengthMm": 299663,
+     "sourceFeatureIds": [
+      "way/80"
+     ],
+     "names": {},
+     "surface": null,
+     "roadClass": "residential",
+     "motorVehicleAccess": "default",
+     "conditionalAccess": null,
+     "barriers": [],
+     "vehicleLimits": {
+      "maxWidthCm": null,
+      "maxHeightCm": null,
+      "maxWeightKg": null
+     },
+     "eligibility": "eligible",
+     "eligibilityReason": null,
+     "dataConfidence": "high",
+     "provenance": "osm way/80",
+     "edgeId": "osm:w80:n1-n2:f",
+     "fromNodeId": "osm:n1",
+     "toNodeId": "osm:n2",
+     "geometry": [
+      [
+       44.5,
+       40.18
+      ],
+      [
+       44.5035273,
+       40.18
+      ]
+     ],
+     "directionIdentity": "forward",
+     "reciprocalEdgeId": "osm:w80:n1-n2:b"
+    }
+   ],
+   "turnRestrictions": []
+  },
+  "session": {
+   "schemaVersion": "1.0.0",
+   "sessionId": "sess-fixture-17",
+   "graphId": "g-da29cebfdd7407c5",
+   "contentHash": "da29cebfdd7407c5e32f3ec62285efa0e9898f3d189232fd87ba1c9f566f2af5",
+   "zone": {
+    "zoneId": "zone-17",
+    "zoneVersion": 1,
+    "definition": {
+     "type": "polygon",
+     "coordinates": [
+      [
+       44.4994121,
+       40.1795478
+      ],
+      [
+       44.5041152,
+       40.1795478
+      ],
+      [
+       44.5041152,
+       40.1804522
+      ],
+      [
+       44.4994121,
+       40.1804522
+      ]
+     ]
+    }
+   },
+   "vehicleProfile": "passenger_car",
+   "boundaryPolicy": "STRICT_INSIDE",
+   "returnToStart": false,
+   "startSelection": {
+    "requested": [
+     44.5,
+     40.18
+    ],
+    "snapped": {
+     "edgeId": "osm:w80:n1-n2:f",
+     "offsetMeters": 0,
+     "position": [
+      44.5,
+      40.18
+     ],
+     "distanceMeters": 0
+    },
+    "confirmed": true
+   },
+   "createdAt": "1970-01-01T00:00:00.000Z",
+   "status": "paused",
+   "planningRevision": 0,
+   "progressRevision": 15,
+   "requiredIntervals": [
+    {
+     "requirementId": "osm:w80:n1-n2:b#0",
+     "edgeId": "osm:w80:n1-n2:b",
+     "startOffsetMeters": 0,
+     "endOffsetMeters": 299.663,
+     "lengthMeters": 299.663,
+     "status": "blocked",
+     "exclusionReason": null
+    },
+    {
+     "requirementId": "osm:w80:n1-n2:f#0",
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 0,
+     "endOffsetMeters": 299.663,
+     "lengthMeters": 299.663,
+     "status": "partial",
+     "exclusionReason": null
+    }
+   ],
+   "confirmedTraversals": [
+    {
+     "traversalId": "tr:x0:x2:osm:w80:n1-n2:f:0",
+     "observationIds": [
+      "x0",
+      "x1",
+      "x2"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 0,
+     "endOffsetMeters": 19.98151209367642,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000000000,
+     "timestampEnd": 1700000002000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x2:x3:osm:w80:n1-n2:f:19982",
+     "observationIds": [
+      "x2",
+      "x3"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 19.98151209367642,
+     "endOffsetMeters": 29.963772599860977,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000002000,
+     "timestampEnd": 1700000003000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x3:x4:osm:w80:n1-n2:f:29964",
+     "observationIds": [
+      "x3",
+      "x4"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 29.963772599860977,
+     "endOffsetMeters": 39.954528647001005,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000003000,
+     "timestampEnd": 1700000004000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x4:x5:osm:w80:n1-n2:f:39955",
+     "observationIds": [
+      "x4",
+      "x5"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 39.954528647001005,
+     "endOffsetMeters": 49.9452846935374,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000004000,
+     "timestampEnd": 1700000005000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x5:x6:osm:w80:n1-n2:f:49945",
+     "observationIds": [
+      "x5",
+      "x6"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 49.9452846935374,
+     "endOffsetMeters": 59.93604074067743,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000005000,
+     "timestampEnd": 1700000006000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x6:x7:osm:w80:n1-n2:f:59936",
+     "observationIds": [
+      "x6",
+      "x7"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 59.93604074067743,
+     "endOffsetMeters": 69.91830124625834,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000006000,
+     "timestampEnd": 1700000007000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x7:x8:osm:w80:n1-n2:f:69918",
+     "observationIds": [
+      "x7",
+      "x8"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 69.91830124625834,
+     "endOffsetMeters": 79.90905729339836,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000007000,
+     "timestampEnd": 1700000008000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x8:x9:osm:w80:n1-n2:f:79909",
+     "observationIds": [
+      "x8",
+      "x9"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 79.90905729339836,
+     "endOffsetMeters": 89.8998133405384,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000008000,
+     "timestampEnd": 1700000009000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x9:x10:osm:w80:n1-n2:f:89900",
+     "observationIds": [
+      "x9",
+      "x10"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 89.8998133405384,
+     "endOffsetMeters": 99.89056938707479,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000009000,
+     "timestampEnd": 1700000010000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x10:x11:osm:w80:n1-n2:f:99891",
+     "observationIds": [
+      "x10",
+      "x11"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 99.89056938707479,
+     "endOffsetMeters": 109.87282989325934,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000010000,
+     "timestampEnd": 1700000011000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x11:x12:osm:w80:n1-n2:f:109873",
+     "observationIds": [
+      "x11",
+      "x12"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 109.87282989325934,
+     "endOffsetMeters": 119.86358594039939,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000011000,
+     "timestampEnd": 1700000012000,
+     "manuallyReviewed": false
+    },
+    {
+     "traversalId": "tr:x12:x13:osm:w80:n1-n2:f:119864",
+     "observationIds": [
+      "x12",
+      "x13"
+     ],
+     "edgeId": "osm:w80:n1-n2:f",
+     "startOffsetMeters": 119.86358594039939,
+     "endOffsetMeters": 129.85434198693576,
+     "confidence": 0.9,
+     "evidence": "continuous",
+     "timestampStart": 1700000012000,
+     "timestampEnd": 1700000013000,
+     "manuallyReviewed": false
+    }
+   ],
+   "exclusions": [
+    {
+     "requirementId": "osm:w80:n1-n2:b#0",
+     "reason": "blocked",
+     "note": "construction",
+     "at": 1700000020000,
+     "active": true
+    }
+   ],
+   "routePlan": null,
+   "eventLogPosition": 16
+  },
+  "events": [
+   {
+    "eventId": "sess-fixture-17:1",
+    "seq": 1,
+    "sessionId": "sess-fixture-17",
+    "type": "session_created",
+    "timestamp": 1700000000000,
+    "schemaVersion": "1.0.0",
+    "payload": {}
+   },
+   {
+    "eventId": "sess-fixture-17:2",
+    "seq": 2,
+    "sessionId": "sess-fixture-17",
+    "type": "start_confirmed",
+    "timestamp": 1700000000001,
+    "schemaVersion": "1.0.0",
+    "payload": {}
+   },
+   {
+    "eventId": "sess-fixture-17:3",
+    "seq": 3,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000002000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x0:x2:osm:w80:n1-n2:f:0",
+      "observationIds": [
+       "x0",
+       "x1",
+       "x2"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 0,
+      "endOffsetMeters": 19.98151209367642,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000000000,
+      "timestampEnd": 1700000002000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:4",
+    "seq": 4,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000003000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x2:x3:osm:w80:n1-n2:f:19982",
+      "observationIds": [
+       "x2",
+       "x3"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 19.98151209367642,
+      "endOffsetMeters": 29.963772599860977,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000002000,
+      "timestampEnd": 1700000003000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:5",
+    "seq": 5,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000004000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x3:x4:osm:w80:n1-n2:f:29964",
+      "observationIds": [
+       "x3",
+       "x4"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 29.963772599860977,
+      "endOffsetMeters": 39.954528647001005,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000003000,
+      "timestampEnd": 1700000004000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:6",
+    "seq": 6,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000005000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x4:x5:osm:w80:n1-n2:f:39955",
+      "observationIds": [
+       "x4",
+       "x5"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 39.954528647001005,
+      "endOffsetMeters": 49.9452846935374,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000004000,
+      "timestampEnd": 1700000005000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:7",
+    "seq": 7,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000006000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x5:x6:osm:w80:n1-n2:f:49945",
+      "observationIds": [
+       "x5",
+       "x6"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 49.9452846935374,
+      "endOffsetMeters": 59.93604074067743,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000005000,
+      "timestampEnd": 1700000006000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:8",
+    "seq": 8,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000007000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x6:x7:osm:w80:n1-n2:f:59936",
+      "observationIds": [
+       "x6",
+       "x7"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 59.93604074067743,
+      "endOffsetMeters": 69.91830124625834,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000006000,
+      "timestampEnd": 1700000007000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:9",
+    "seq": 9,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000008000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x7:x8:osm:w80:n1-n2:f:69918",
+      "observationIds": [
+       "x7",
+       "x8"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 69.91830124625834,
+      "endOffsetMeters": 79.90905729339836,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000007000,
+      "timestampEnd": 1700000008000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:10",
+    "seq": 10,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000009000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x8:x9:osm:w80:n1-n2:f:79909",
+      "observationIds": [
+       "x8",
+       "x9"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 79.90905729339836,
+      "endOffsetMeters": 89.8998133405384,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000008000,
+      "timestampEnd": 1700000009000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:11",
+    "seq": 11,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000010000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x9:x10:osm:w80:n1-n2:f:89900",
+      "observationIds": [
+       "x9",
+       "x10"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 89.8998133405384,
+      "endOffsetMeters": 99.89056938707479,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000009000,
+      "timestampEnd": 1700000010000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:12",
+    "seq": 12,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000011000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x10:x11:osm:w80:n1-n2:f:99891",
+      "observationIds": [
+       "x10",
+       "x11"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 99.89056938707479,
+      "endOffsetMeters": 109.87282989325934,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000010000,
+      "timestampEnd": 1700000011000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:13",
+    "seq": 13,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000012000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x11:x12:osm:w80:n1-n2:f:109873",
+      "observationIds": [
+       "x11",
+       "x12"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 109.87282989325934,
+      "endOffsetMeters": 119.86358594039939,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000011000,
+      "timestampEnd": 1700000012000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:14",
+    "seq": 14,
+    "sessionId": "sess-fixture-17",
+    "type": "traversal_confirmed",
+    "timestamp": 1700000013000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "traversal": {
+      "traversalId": "tr:x12:x13:osm:w80:n1-n2:f:119864",
+      "observationIds": [
+       "x12",
+       "x13"
+      ],
+      "edgeId": "osm:w80:n1-n2:f",
+      "startOffsetMeters": 119.86358594039939,
+      "endOffsetMeters": 129.85434198693576,
+      "confidence": 0.9,
+      "evidence": "continuous",
+      "timestampStart": 1700000012000,
+      "timestampEnd": 1700000013000,
+      "manuallyReviewed": false
+     }
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:15",
+    "seq": 15,
+    "sessionId": "sess-fixture-17",
+    "type": "requirement_excluded",
+    "timestamp": 1700000020000,
+    "schemaVersion": "1.0.0",
+    "payload": {
+     "requirementIds": [
+      "osm:w80:n1-n2:b#0"
+     ],
+     "reason": "blocked",
+     "note": "construction"
+    }
+   },
+   {
+    "eventId": "sess-fixture-17:16",
+    "seq": 16,
+    "sessionId": "sess-fixture-17",
+    "type": "paused",
+    "timestamp": 1700000021000,
+    "schemaVersion": "1.0.0",
+    "payload": {}
+   }
+  ],
+  "diagnostics": {
+   "observationsIncluded": false,
+   "gapCount": 0,
+   "notes": [
+    "Graph included under ODbL 1.0; keep attribution."
+   ]
+  }
+ },
+ "expectedAfterImport": {
+  "contentHash": "da29cebfdd7407c5e32f3ec62285efa0e9898f3d189232fd87ba1c9f566f2af5",
+  "forwardUnion": [
+   [
+    0,
+    129.85
+   ]
+  ],
+  "backwardUnion": [],
+  "activeExclusions": [
+   "osm:w80:n1-n2:b#0"
+  ],
+  "requirementStatuses": {
+   "osm:w80:n1-n2:b#0": "blocked",
+   "osm:w80:n1-n2:f#0": "partial"
+  },
+  "traversalCount": 12,
+  "status": "paused"
+ },
+ "invalidCases": [
+  {
+   "name": "wrong_contract_version",
+   "patch": [
+    {
+     "op": "replace",
+     "path": "/contractVersion",
+     "value": "2.0.0"
+    }
+   ],
+   "expectedFirstError": "unsupported_contract_version:2.0.0"
+  },
+  {
+   "name": "graph_hash_tampered",
+   "patch": [
+    {
+     "op": "replace",
+     "path": "/graph/directedEdges/0/lengthMm",
+     "value": 1
+    }
+   ],
+   "expectedFirstError": "graph_hash_mismatch"
+  },
+  {
+   "name": "session_graph_mismatch",
+   "patch": [
+    {
+     "op": "replace",
+     "path": "/session/contentHash",
+     "value": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+   ],
+   "expectedFirstError": "session_graph_mismatch"
+  },
+  {
+   "name": "impossible_offset",
+   "patch": [
+    {
+     "op": "replace",
+     "path": "/session/confirmedTraversals/0/endOffsetMeters",
+     "value": 5000
+    }
+   ],
+   "expectedFirstError": "impossible_offsets:tr:x0:x2:osm:w80:n1-n2:f:0"
+  },
+  {
+   "name": "unexpected_crs",
+   "patch": [
+    {
+     "op": "replace",
+     "path": "/graph/coordinateReferenceSystem",
+     "value": "EPSG:3857"
+    }
+   ],
+   "expectedFirstError": "schema_invalid"
+  },
+  {
+   "name": "missing_graph_unknown_on_device",
+   "patch": [
+    {
+     "op": "replace",
+     "path": "/graph",
+     "value": null
+    }
+   ],
+   "expectedFirstError": "graph_unavailable_on_this_device"
+  },
+  {
+   "name": "non_monotonic_events",
+   "patch": [
+    {
+     "op": "replace",
+     "path": "/events/1/seq",
+     "value": 1
+    }
+   ],
+   "expectedFirstError": "non_monotonic_event:sess-fixture-17:2"
+  },
+  {
+   "name": "corrupt_json",
+   "raw": "{\"packageType\":\"coverage-session-export\",\"contractVersion\":\"1.0.0\",\"exportedAt\":\"1970-01-01T00:00:00",
+   "expectedFirstError": "corrupt_json"
+  }
+ ]
+}

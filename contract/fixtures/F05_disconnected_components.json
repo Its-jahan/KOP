@@ -1,0 +1,237 @@
+{
+ "fixtureId": "F05_disconnected_components",
+ "title": "Disconnected components",
+ "description": "No fictional connecting line or false completion.",
+ "contractVersion": "1.0.0",
+ "kind": "graph",
+ "input": {
+  "osm": {
+   "osm3s": {
+    "timestamp_osm_base": "fixture"
+   },
+   "elements": [
+    {
+     "type": "node",
+     "id": 1,
+     "lat": 40.18,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 2,
+     "lat": 40.18,
+     "lon": 44.5017637
+    },
+    {
+     "type": "node",
+     "id": 3,
+     "lat": 40.1809044,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 4,
+     "lat": 40.1809044,
+     "lon": 44.5017637
+    },
+    {
+     "type": "way",
+     "id": 40,
+     "nodes": [
+      1,
+      2
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    },
+    {
+     "type": "way",
+     "id": 41,
+     "nodes": [
+      3,
+      4
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    }
+   ]
+  },
+  "zone": {
+   "type": "polygon",
+   "coordinates": [
+    [
+     44.4994121,
+     40.1795478
+    ],
+    [
+     44.5023515,
+     40.1795478
+    ],
+    [
+     44.5023515,
+     40.1813566
+    ],
+    [
+     44.4994121,
+     40.1813566
+    ]
+   ]
+  },
+  "policies": [
+   "STRICT_INSIDE",
+   "ALLOW_NECESSARY_CONNECTORS"
+  ],
+  "start": {
+   "edgeId": "osm:w40:n1-n2:f",
+   "offsetMeters": 0
+  }
+ },
+ "expected": {
+  "graph": {
+   "contentHash": "99e48d94fd13811e048e49a6bfd9eadc6972195ec686500abadd6843e7df36a0",
+   "graphId": "g-99e48d94fd13811e",
+   "nodeCount": 4,
+   "edgeCount": 4,
+   "restrictionCount": 0,
+   "edgeIds": [
+    "osm:w40:n1-n2:b",
+    "osm:w40:n1-n2:f",
+    "osm:w41:n3-n4:b",
+    "osm:w41:n3-n4:f"
+   ],
+   "eligibility": {
+    "osm:w40:n1-n2:b": "eligible",
+    "osm:w40:n1-n2:f": "eligible",
+    "osm:w41:n3-n4:b": "eligible",
+    "osm:w41:n3-n4:f": "eligible"
+   },
+   "eligibilityReason": {},
+   "nodePassage": {},
+   "restrictions": []
+  },
+  "requirements": [
+   {
+    "requirementId": "osm:w40:n1-n2:b#0",
+    "edgeId": "osm:w40:n1-n2:b",
+    "start": 0,
+    "end": 149.84,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w40:n1-n2:f#0",
+    "edgeId": "osm:w40:n1-n2:f",
+    "start": 0,
+    "end": 149.84,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w41:n3-n4:b#0",
+    "edgeId": "osm:w41:n3-n4:b",
+    "start": 0,
+    "end": 149.83,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w41:n3-n4:f#0",
+    "edgeId": "osm:w41:n3-n4:f",
+    "start": 0,
+    "end": 149.83,
+    "status": "unvisited"
+   }
+  ],
+  "plans": {
+   "STRICT_INSIDE": {
+    "status": "partial",
+    "edgeSequence": [
+     "osm:w40:n1-n2:f",
+     "osm:w40:n1-n2:b"
+    ],
+    "stepKinds": [
+     "required",
+     "required"
+    ],
+    "turnarounds": [
+     "1:unverified"
+    ],
+    "coveredRequirementIds": [
+     "osm:w40:n1-n2:b#0",
+     "osm:w40:n1-n2:f#0"
+    ],
+    "unreachable": [
+     "osm:w41:n3-n4:b#0:not_reachable_from_start",
+     "osm:w41:n3-n4:f#0:not_reachable_from_start"
+    ],
+    "totals": {
+     "totalMeters": 299.7,
+     "newCoverageMeters": 299.7,
+     "repeatMeters": 0,
+     "outsideMeters": 0,
+     "approachMeters": 0
+    },
+    "valid": true,
+    "validationErrors": []
+   },
+   "ALLOW_NECESSARY_CONNECTORS": {
+    "status": "partial",
+    "edgeSequence": [
+     "osm:w40:n1-n2:f",
+     "osm:w40:n1-n2:b"
+    ],
+    "stepKinds": [
+     "required",
+     "required"
+    ],
+    "turnarounds": [
+     "1:unverified"
+    ],
+    "coveredRequirementIds": [
+     "osm:w40:n1-n2:b#0",
+     "osm:w40:n1-n2:f#0"
+    ],
+    "unreachable": [
+     "osm:w41:n3-n4:b#0:not_reachable_from_start",
+     "osm:w41:n3-n4:f#0:not_reachable_from_start"
+    ],
+    "totals": {
+     "totalMeters": 299.7,
+     "newCoverageMeters": 299.7,
+     "repeatMeters": 0,
+     "outsideMeters": 0,
+     "approachMeters": 0
+    },
+    "valid": true,
+    "validationErrors": []
+   }
+  },
+  "paths": {},
+  "tracks": {}
+ },
+ "assertions": [
+  {
+   "kind": "plan_status",
+   "policy": "STRICT_INSIDE",
+   "status": "partial"
+  },
+  {
+   "kind": "plan_never_uses_edge_prefix",
+   "policy": "STRICT_INSIDE",
+   "prefix": "osm:w41:"
+  },
+  {
+   "kind": "unreachable_cause",
+   "policy": "STRICT_INSIDE",
+   "requirementId": "osm:w41:n3-n4:f#0",
+   "cause": "not_reachable_from_start"
+  },
+  {
+   "kind": "plan_valid",
+   "policy": "STRICT_INSIDE"
+  }
+ ],
+ "tolerances": {
+  "offsetMeters": 0.5,
+  "totalsMeters": 1
+ }
+}

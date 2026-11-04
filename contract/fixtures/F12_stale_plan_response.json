@@ -1,0 +1,156 @@
+{
+ "fixtureId": "F12_stale_plan_response",
+ "title": "Stale planning response",
+ "description": "A slow older result never replaces a newer plan.",
+ "contractVersion": "1.0.0",
+ "kind": "decidePlan",
+ "cases": [
+  {
+   "name": "newest_request",
+   "ctx": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "latestRequestedPlanningRevision": 5,
+    "acceptedPlanningRevision": 4,
+    "progressRevision": 10
+   },
+   "result": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "planningRevision": 5,
+    "basedOnProgressRevision": 10,
+    "status": "complete"
+   },
+   "expected": {
+    "accept": true,
+    "reconcile": false
+   }
+  },
+  {
+   "name": "superseded_by_newer_request",
+   "ctx": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "latestRequestedPlanningRevision": 6,
+    "acceptedPlanningRevision": 4,
+    "progressRevision": 10
+   },
+   "result": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "planningRevision": 5,
+    "basedOnProgressRevision": 9,
+    "status": "complete"
+   },
+   "expected": {
+    "accept": false,
+    "reason": "superseded"
+   }
+  },
+  {
+   "name": "arrives_after_newer_accepted",
+   "ctx": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "latestRequestedPlanningRevision": 6,
+    "acceptedPlanningRevision": 6,
+    "progressRevision": 12
+   },
+   "result": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "planningRevision": 5,
+    "basedOnProgressRevision": 9,
+    "status": "complete"
+   },
+   "expected": {
+    "accept": false,
+    "reason": "older_than_accepted"
+   }
+  },
+  {
+   "name": "progress_advanced_during_compute",
+   "ctx": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "latestRequestedPlanningRevision": 7,
+    "acceptedPlanningRevision": 6,
+    "progressRevision": 15
+   },
+   "result": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "planningRevision": 7,
+    "basedOnProgressRevision": 12,
+    "status": "partial"
+   },
+   "expected": {
+    "accept": true,
+    "reconcile": true
+   }
+  },
+  {
+   "name": "graph_mismatch",
+   "ctx": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "latestRequestedPlanningRevision": 7,
+    "acceptedPlanningRevision": 6,
+    "progressRevision": 15
+   },
+   "result": {
+    "graphHash": "other",
+    "zoneVersion": 1,
+    "planningRevision": 7,
+    "basedOnProgressRevision": 15,
+    "status": "complete"
+   },
+   "expected": {
+    "accept": false,
+    "reason": "graph_mismatch"
+   }
+  },
+  {
+   "name": "zone_mismatch",
+   "ctx": {
+    "graphHash": "h",
+    "zoneVersion": 2,
+    "latestRequestedPlanningRevision": 7,
+    "acceptedPlanningRevision": 6,
+    "progressRevision": 15
+   },
+   "result": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "planningRevision": 7,
+    "basedOnProgressRevision": 15,
+    "status": "complete"
+   },
+   "expected": {
+    "accept": false,
+    "reason": "zone_mismatch"
+   }
+  },
+  {
+   "name": "cancelled",
+   "ctx": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "latestRequestedPlanningRevision": 7,
+    "acceptedPlanningRevision": 6,
+    "progressRevision": 15
+   },
+   "result": {
+    "graphHash": "h",
+    "zoneVersion": 1,
+    "planningRevision": 7,
+    "basedOnProgressRevision": 15,
+    "status": "cancelled"
+   },
+   "expected": {
+    "accept": false,
+    "reason": "cancelled"
+   }
+  }
+ ]
+}
