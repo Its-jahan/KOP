@@ -7,7 +7,7 @@ import { DEFAULT_MATCHER_CONFIG, initialMatcherState, processObservation, type M
 import { normalizeOverpass, type OverpassResponse } from './osm';
 import { legalShortestPath, planCoverage } from './planner';
 import { addInterval, type Interval } from './intervals';
-import { computeRequirements, edgeTraversable } from './requirements';
+import { computeRequirements } from './requirements';
 import { initialGuidance, updateGuidance } from './guidance';
 import { validatePlan } from './validator';
 import type { BoundaryPolicy, LocationObservation, RoutePlan, ZoneDefinition } from './types';
