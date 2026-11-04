@@ -37,8 +37,25 @@ const seg = (w: number, a: number, b: number, d: 'f' | 'b') => `osm:w${w}:n${a}-
     tracks: [
       { name: 'eastbound', observations: track([[0, 0], [200, 0]], { idPrefix: 'e', speed: 10, accuracy: 5 }) },
       { name: 'east_then_west', observations: track([[0, 0], [200, 0], [0, 0]], { idPrefix: 'r', speed: 10, accuracy: 5 }) },
+      { name: 'outlier_reverse', observations: (() => {
+        const a = track([[20, 0], [130, 0]], { idPrefix: 'o', speed: 10, accuracy: 5 });
+        const [lon, lat] = ll(105, 0);
+        const out = obs('o_out', a[a.length - 1].timestamp + 1000, lon, lat, { accuracy: 5, speed: 10, bearing: 90 });
+        const b = track([[150, 0], [190, 0]], { idPrefix: 'o2', speed: 10, accuracy: 5, startT: out.timestamp + 1000 });
+        return [...a, out, ...b];
+      })() },
+      { name: 'outlier_reverse_no_heading', observations: (() => {
+        const a = track([[20, 0], [130, 0]], { idPrefix: 'q', speed: 10, accuracy: 5, reportBearing: false, reportSpeed: false });
+        const [lon, lat] = ll(105, 0);
+        const out = obs('q_out', a[a.length - 1].timestamp + 1000, lon, lat, { accuracy: 5, speed: null, bearing: null });
+        const b = track([[150, 0], [190, 0]], { idPrefix: 'q2', speed: 10, accuracy: 5, startT: out.timestamp + 1000, reportBearing: false, reportSpeed: false });
+        return [...a, out, ...b];
+      })() },
     ],
   }, [
+    { kind: 'edge_covered_at_most', track: 'outlier_reverse', edgeId: seg(10, 1, 2, 'b'), meters: 0 },
+    { kind: 'edge_covered_at_least', track: 'outlier_reverse', edgeId: seg(10, 1, 2, 'f'), meters: 160 },
+    { kind: 'edge_covered_at_most', track: 'outlier_reverse_no_heading', edgeId: seg(10, 1, 2, 'b'), meters: 0 },
     { kind: 'plan_covers_all', policy: 'STRICT_INSIDE' },
     { kind: 'edge_covered_at_least', track: 'eastbound', edgeId: seg(10, 1, 2, 'f'), meters: 190 },
     { kind: 'edge_covered_at_most', track: 'eastbound', edgeId: seg(10, 1, 2, 'b'), meters: 0 },
@@ -172,8 +189,20 @@ const seg = (w: number, a: number, b: number, d: 'f' | 'b') => `osm:w${w}:n${a}-
       { name: 'over_bridge', observations: track([[0, -90], [0, 90]], { idPrefix: 'b', speed: 10, accuracy: 5 }) },
       { name: 'stationary_jitter', observations: jitter },
       { name: 'stationary_jitter_no_speed', observations: jitterNoSpeed },
+      { name: 'switch_to_parallel', observations: (() => {
+        const [lon, lat] = ll(-90, 2);
+        const first = obs('s0', T0, lon, lat, { accuracy: 10, speed: 10, bearing: 90 });
+        return [first, ...track([[-80, 12], [90, 12]], { idPrefix: 's', speed: 10, accuracy: 10, startT: T0 + 1000 })];
+      })() },
+      { name: 'slow_drift_no_speed', observations: Array.from({ length: 40 }, (_, k) => {
+        const [lon, lat] = ll(-60 + k * 0.55, (k % 3) - 1);
+        return obs(`dr${k}`, T0 + k * 1000, lon, lat, { accuracy: 8, speed: null, bearing: null });
+      }) },
     ],
   }, [
+    { kind: 'edge_covered_at_least', track: 'switch_to_parallel', edgeId: seg(72, 3, 4, 'f'), meters: 120 },
+    { kind: 'edge_covered_at_most', track: 'switch_to_parallel', edgeId: seg(71, 1, 2, 'f'), meters: 0 },
+    { kind: 'track_total_at_most', track: 'slow_drift_no_speed', meters: 0 },
     { kind: 'track_total_at_most', track: 'between_parallel', meters: 0 },
     { kind: 'edge_covered_at_least', track: 'over_bridge', edgeId: seg(73, 5, 6, 'f'), meters: 170 },
     { kind: 'track_only_edges', track: 'over_bridge', edgeIds: [seg(73, 5, 6, 'f')] },
@@ -215,8 +244,19 @@ const seg = (w: number, a: number, b: number, d: 'f' | 'b') => `osm:w${w}:n${a}-
   const jump = at('jump1', 570, 58_000, { y: 400 });
   await emit('F10_gps_failures', 'GPS outage, stale fix, jump, poor accuracy, delayed timestamps', 'No fabricated progress across gaps; every failure ends the current matched run.', {
     osm, zone: { type: 'polygon', coordinates: rect(-50, -50, 850, 50) }, policies: [], start: null,
-    tracks: [{ name: 'faulty', observations: [...p1, ...p2, delayed, ...poor, ...p3, stale, ...p4, jump] }],
+    tracks: [
+      { name: 'faulty', observations: [...p1, ...p2, delayed, ...poor, ...p3, stale, ...p4, jump] },
+      { name: 'future_timestamp', observations: (() => {
+        const a = track([[0, 0], [60, 0]], { idPrefix: 'fa', speed: 10, accuracy: 5 });
+        const [lon, lat] = ll(65, 0);
+        const fut = { ...obs('fut1', T0 + 60_000 + 7_000, lon, lat, { accuracy: 5, speed: 10, bearing: 90 }), ageMs: -60_000 };
+        const b = track([[70, 0], [300, 0]], { idPrefix: 'fb', speed: 10, accuracy: 5, startT: T0 + 7_000 });
+        return [...a, fut, ...b];
+      })() },
+    ],
   }, [
+    { kind: 'edge_covered_at_least', track: 'future_timestamp', edgeId: seg(90, 1, 2, 'f'), meters: 250 },
+    { kind: 'gap_reasons_include', track: 'future_timestamp', reasons: ['stale'] },
     { kind: 'edge_not_covered_in', track: 'faulty', edgeId: seg(90, 1, 2, 'f'), start: 105, end: 295 },
     { kind: 'edge_not_covered_in', track: 'faulty', edgeId: seg(90, 1, 2, 'f'), start: 402, end: 438 },
     { kind: 'edge_not_covered_in', track: 'faulty', edgeId: seg(90, 1, 2, 'f'), start: 502, end: 518 },
@@ -244,6 +284,38 @@ const seg = (w: number, a: number, b: number, d: 'f' | 'b') => `osm:w${w}:n${a}-
     { kind: 'edge_covered_at_least', track: 'turn_north_at_B', edgeId: seg(102, 2, 4, 'f'), meters: 40 },
     { kind: 'replan_valid', track: 'turn_north_at_B' },
     { kind: 'replan_does_not_claim', track: 'turn_north_at_B', requirementId: `${seg(101, 1, 2, 'f')}#0` },
+  ]);
+}
+
+// F19 only_* restriction whose to-way passes through the via node
+{
+  const osm = new Osm().node(1, 0, 0).node(2, 100, 0).node(3, 200, 0).node(4, 100, -100).node(5, 0, -100).node(6, 200, -100)
+    .way(401, [1, 2, 3], RES).way(402, [4, 2], RES).way(403, [5, 4, 6], RES).way(404, [1, 5], RES).way(405, [3, 6], RES)
+    .rel(951, [{ type: 'way', ref: 402, role: 'from' }, { type: 'node', ref: 2, role: 'via' }, { type: 'way', ref: 401, role: 'to' }], { type: 'restriction', restriction: 'only_right_turn' })
+    .json();
+  await emit('F19_only_restriction_through_via', 'only_* restriction with a to-way passing through the junction', 'The branch matching the restriction direction stays the only legal exit.', {
+    osm, zone: { type: 'polygon', coordinates: rect(-50, -150, 250, 50) }, policies: ['STRICT_INSIDE'],
+    start: { edgeId: seg(402, 4, 2, 'f'), offsetMeters: 0 },
+    pathQueries: [{ name: 'north_then_west', fromPrefix: [seg(402, 4, 2, 'f')], toEdgeId: seg(401, 1, 2, 'b') }],
+  }, [
+    { kind: 'path_not_equal', path: 'north_then_west', forbidden: [seg(401, 1, 2, 'b')] },
+    { kind: 'plan_not_contains_sequence', policy: 'STRICT_INSIDE', sequence: [seg(402, 4, 2, 'f'), seg(401, 1, 2, 'b')] },
+    { kind: 'plan_valid', policy: 'STRICT_INSIDE' },
+  ]);
+}
+
+// F20 no interpolation across a long gap around a corner
+{
+  const osm = new Osm().node(1, 0, 0).node(2, 100, 0).node(3, 100, 70).node(4, 250, 70)
+    .way(501, [1, 2], RES).way(502, [2, 3], RES).way(503, [3, 4], RES).json();
+  const a = track([[0, 0], [90, 0]], { idPrefix: 'a', speed: 10, accuracy: 5 });
+  const b = track([[110, 70], [240, 70]], { idPrefix: 'b', speed: 10, accuracy: 5, startT: a[a.length - 1].timestamp + 11_000 });
+  await emit('F20_gap_corner', 'No guessed traversal through a long gap', 'An 11 s gap around a corner leaves the unobserved street uncredited.', {
+    osm, zone: { type: 'polygon', coordinates: rect(-50, -50, 300, 120) }, policies: [], start: null,
+    tracks: [{ name: 'gap_around_corner', observations: [...a, ...b] }],
+  }, [
+    { kind: 'edge_covered_at_most', track: 'gap_around_corner', edgeId: seg(502, 2, 3, 'f'), meters: 0 },
+    { kind: 'gap_reasons_include', track: 'gap_around_corner', reasons: ['gap'] },
   ]);
 }
 
@@ -328,7 +400,7 @@ emitTable('F12_stale_plan_response', 'Stale planning response', 'A slow older re
   const cases: FailureInput[] = [
     { kind: 'location_permission_denied' }, { kind: 'location_disabled' }, { kind: 'location_unavailable' }, { kind: 'location_timeout' },
     { kind: 'credentials_missing' }, { kind: 'provider_not_configured' }, { kind: 'graph_http', status: 429 }, { kind: 'graph_http', status: 403 },
-    { kind: 'graph_http', status: 504 }, { kind: 'graph_network_error' }, { kind: 'graph_empty' }, { kind: 'graph_too_large', edges: 90000, limit: 60000 },
+    { kind: 'graph_http', status: 504 }, { kind: 'graph_network_error' }, { kind: 'graph_empty' }, { kind: 'graph_incomplete' }, { kind: 'graph_too_large', edges: 90000, limit: 60000 },
   ];
   emitTable('F16_failure_states', 'Permission, location, key, quota, area and network failures', 'Clear non-success states; navigation cannot start.', 'mapFailure',
     cases.map((input) => ({ input, expected: mapFailure(input) })));
@@ -419,6 +491,9 @@ console.log('fixtures written to', OUT);
     { name: 'unexpected_crs', patch: [{ op: 'replace', path: '/graph/coordinateReferenceSystem', value: 'EPSG:3857' }] },
     { name: 'missing_graph_unknown_on_device', patch: [{ op: 'replace', path: '/graph', value: null }] },
     { name: 'non_monotonic_events', patch: [{ op: 'replace', path: '/events/1/seq', value: 1 }] },
+    { name: 'length_meters_tampered', patch: [{ op: 'replace', path: '/graph/directedEdges/0/lengthMeters', value: 1234.5 }] },
+    { name: 'requirements_tampered', patch: [{ op: 'replace', path: '/session/requiredIntervals/0/endOffsetMeters', value: 130 }] },
+    { name: 'event_traversal_impossible_offset', patch: [{ op: 'replace', path: `/events/${events.findIndex((e) => e.type === 'traversal_confirmed')}/payload/traversal/endOffsetMeters`, value: 99999 }] },
   ];
   const applyPatch = (doc: unknown, ops: { op: string; path: string; value: unknown }[]) => {
     const d = JSON.parse(JSON.stringify(doc));

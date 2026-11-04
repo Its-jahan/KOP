@@ -24586,8 +24586,8 @@
  },
  "expected": {
   "graph": {
-   "contentHash": "4126d121de2776dcb4246c85b3c488576382576d84f89b954567022b21f64933",
-   "graphId": "g-4126d121de2776dc",
+   "contentHash": "65dfae4bb5c85e550aeffa75b121539c1958c0d7915115435d179eb3f5261fa1",
+   "graphId": "g-65dfae4bb5c85e55",
    "nodeCount": 900,
    "edgeCount": 3480,
    "restrictionCount": 0,

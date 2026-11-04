@@ -83,8 +83,8 @@
  },
  "expected": {
   "graph": {
-   "contentHash": "9bfe34c05c440ea9aa1bcb8e471d8bbbb1e3bf72e505bf436190b731c29d7d86",
-   "graphId": "g-9bfe34c05c440ea9",
+   "contentHash": "b584e3648193d355190253ffdab81d3254c0b33ed16b92e7ed0b5150fad0b120",
+   "graphId": "g-b584e3648193d355",
    "nodeCount": 2,
    "edgeCount": 2,
    "restrictionCount": 0,

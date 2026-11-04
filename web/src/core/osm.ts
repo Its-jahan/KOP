@@ -1,7 +1,7 @@
 // OpenStreetMap (Overpass JSON) -> canonical GraphSnapshot normalisation.
 // Data © OpenStreetMap contributors, ODbL 1.0. This module is pure and deterministic.
 
-import { bboxOf, haversine, quantize } from './geo';
+import { angleDiff, bboxOf, bearing, haversine, quantize } from './geo';
 import { computeContentHash } from './hash';
 import {
   NORMALIZER_VERSION,
@@ -254,9 +254,15 @@ export async function normalizeOverpass(resp: OverpassResponse, opts: NormalizeO
   const segmentsByWay = new Map<number, Segment[]>();
   const usedSegIds = new Set<string>();
   for (const w of hwWays) {
-    const ids = w.nodes.filter((n) => osmNodes.has(n));
-    if (ids.length < 2) continue;
+    // Split at missing node references: never join the remaining nodes across a gap.
+    const runs: number[][] = [[]];
+    for (const n of w.nodes) {
+      if (osmNodes.has(n)) runs[runs.length - 1].push(n);
+      else if (runs[runs.length - 1].length) runs.push([]);
+    }
     const segs: Segment[] = [];
+    for (const ids of runs) {
+    if (ids.length < 2) continue;
     let start = 0;
     for (let i = 1; i < ids.length; i++) {
       if (isGraphNode(ids[i], i, ids.length)) {
@@ -287,6 +293,7 @@ export async function normalizeOverpass(resp: OverpassResponse, opts: NormalizeO
         }
         start = i;
       }
+    }
     }
     segmentsByWay.set(w.id, segs);
   }
@@ -371,6 +378,8 @@ export async function normalizeOverpass(resp: OverpassResponse, opts: NormalizeO
   }
   const restrictions: TurnRestriction[] = [];
   let skippedRestrictions = 0;
+  let ambiguousOnly = 0;
+  const edgeById = new Map(edges.map((e) => [e.edgeId, e]));
   let exceptedRestrictions = 0;
   for (const r of relations.slice().sort((a, b) => a.id - b.id)) {
     const t = r.tags ?? {};
@@ -442,6 +451,35 @@ export async function normalizeOverpass(resp: OverpassResponse, opts: NormalizeO
       skippedRestrictions++;
       continue;
     }
+    // A to-way that passes through the junction yields several candidate to-edges. For a
+    // directional only_* restriction keep the branch matching its direction; otherwise the
+    // forbidden branch would become allowed. no_* keeps all candidates (conservative).
+    const desired: Record<string, number> = { only_right_turn: 90, only_left_turn: -90, only_straight_on: 0, only_u_turn: 180 };
+    if (kind === 'only' && desired[value] !== undefined) {
+      const byBase = new Map<string, typeof entries>();
+      for (const en of entries) {
+        const k = en.from + '|' + en.viaEdges.join(',');
+        byBase.set(k, [...(byBase.get(k) ?? []), en]);
+      }
+      const kept: typeof entries = [];
+      for (const group of byBase.values()) {
+        if (group.length === 1) {
+          kept.push(group[0]);
+          continue;
+        }
+        const lastIn = edgeById.get(group[0].viaEdges.length ? group[0].viaEdges[group[0].viaEdges.length - 1] : group[0].from)!;
+        const inB = bearing(lastIn.geometry[lastIn.geometry.length - 2], lastIn.geometry[lastIn.geometry.length - 1]);
+        const scored = group.map((en) => {
+          const te = edgeById.get(en.to)!;
+          const a = angleDiff(inB, bearing(te.geometry[0], te.geometry[1]));
+          return { en, err: Math.abs(angleDiff(a, desired[value])) };
+        }).sort((x, y) => x.err - y.err || (x.en.to < y.en.to ? -1 : x.en.to > y.en.to ? 1 : 0));
+        kept.push(scored[0].en);
+        ambiguousOnly++;
+      }
+      entries.length = 0;
+      entries.push(...kept);
+    }
     const entryKey = (x: { from: string; viaEdges: string[]; to: string }) => x.from + '|' + x.viaEdges.join(',') + '|' + x.to;
     entries.sort((a, b) => (entryKey(a) < entryKey(b) ? -1 : entryKey(a) > entryKey(b) ? 1 : 0));
     entries.forEach((en, i) => {
@@ -461,6 +499,7 @@ export async function normalizeOverpass(resp: OverpassResponse, opts: NormalizeO
   }
   restrictions.sort((a, b) => (a.restrictionId < b.restrictionId ? -1 : 1));
   if (skippedRestrictions > 0) notes.push(`${skippedRestrictions} turn restriction relations could not be mapped to the extracted graph (likely outside the fetched area) and were not applied.`);
+  if (ambiguousOnly > 0) notes.push(`${ambiguousOnly} only_* restrictions had a to-way passing through the junction; the branch matching the restriction direction was used.`);
   if (exceptedRestrictions > 0) notes.push(`${exceptedRestrictions} turn restrictions exempt passenger cars and were ignored.`);
 
   const allPos = nodes.map((n) => n.position);
@@ -488,7 +527,7 @@ export async function normalizeOverpass(resp: OverpassResponse, opts: NormalizeO
     },
     freshness: { sourceTimestamp: sourceTs, note: 'OSM replication timestamp reported by the Overpass server.' },
     completenessNotes: notes,
-    dataState: opts.dataState ?? 'available',
+    dataState: missingNodeRefs > 0 && (opts.dataState ?? 'available') === 'available' ? 'incomplete' : opts.dataState ?? 'available',
     vehicleProfile: profile.id,
     nodes,
     directedEdges: edges,

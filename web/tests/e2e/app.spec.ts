@@ -119,6 +119,20 @@ test('full flow with simulated GPS: plan, drive, direction-sensitive progress, p
   await expect(page.getByTestId('drive-panel')).toBeVisible();
   const after = await page.getByTestId('progress').innerText();
   expect(after.split('\n')[0]).toBe(before.split('\n')[0]);
+  // resume driving, then reload while ACTIVE (simulated crash): must offer an explicit Resume
+  await page.getByTestId('resume').click();
+  await expect(page.getByTestId('pause')).toBeVisible();
+  for (let y = 10; y <= 40; y += 10) {
+    const [lon, lat] = ll(100, y);
+    await context.setGeolocation({ longitude: lon, latitude: lat, accuracy: 5 });
+    await page.waitForTimeout(1050);
+  }
+  await page.reload();
+  await page.getByRole('button', { name: 'Resume' }).first().click();
+  await expect(page.getByTestId('recovered')).toBeVisible();
+  await expect(page.getByTestId('resume')).toBeVisible();
+  await page.getByTestId('resume').click();
+  await expect(page.getByTestId('gps-state')).not.toContainText('Paused');
   // sessions list shows exactly one session (no duplicate from double click)
   await page.getByRole('button', { name: 'Sessions' }).click();
   await expect(page.locator('.sessions li')).toHaveCount(1);
@@ -154,4 +168,38 @@ test('permission denied shows explicit state', async ({ browser }) => {
   await expect(page.getByTestId('gps-state')).toContainText('Location permission denied');
   await expect(page.getByTestId('maneuver')).toContainText('No guidance');
   await context.close();
+});
+
+test('off-road start is rejected; tab hide records an unverified gap; wake-lock refusal is visible', async ({ context, page }) => {
+  await mockNetwork(context);
+  await context.grantPermissions(['geolocation']);
+  const [lon0, lat0] = ll(0, 0);
+  await context.setGeolocation({ longitude: lon0, latitude: lat0, accuracy: 5 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'wakeLock', { value: { request: () => Promise.reject(new Error('NotAllowedError')) }, configurable: true });
+  });
+  await setup(page);
+  await drawZoneAndLoad(page);
+  // off-road start: 200 m away from any road (outside 150 m snap radius)
+  await page.evaluate(() => (window as unknown as { __coverageMap: { map: { jumpTo: (o: object) => void } } }).__coverageMap.map.jumpTo({ zoom: 14.5 }));
+  await page.waitForTimeout(300);
+  await page.getByTestId('pick-start').click();
+  await mapClick(page, 100, -330);
+  await expect(page.getByText('No legal road within 150 m')).toBeVisible();
+  await page.evaluate(() => (window as unknown as { __coverageMap: { map: { jumpTo: (o: object) => void } } }).__coverageMap.map.jumpTo({ center: [44.50118, 40.18045], zoom: 16 }));
+  await page.waitForTimeout(300);
+  await chooseStartAndPlan(page);
+  await page.getByTestId('start-driving').click();
+  await expect(page.getByTestId('drive-panel')).toContainText('Screen may sleep');
+  // simulate the tab being hidden for 6 s, then visible again
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForTimeout(6000);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.getByTestId('drive-panel')).toContainText('Unverified gap recorded');
 });

@@ -75,6 +75,16 @@ export async function computeContentHash(g: GraphSnapshot): Promise<string> {
   return sha256Hex(canonicalGraphBytes(g));
 }
 
+/** Hash check plus consistency of non-hashed derived fields (lengthMeters, geometry endpoints). */
 export async function verifyGraphHash(g: GraphSnapshot): Promise<boolean> {
-  return (await computeContentHash(g)) === g.contentHash && g.graphId === `g-${g.contentHash.slice(0, 16)}`;
+  if (g.graphId !== `g-${g.contentHash.slice(0, 16)}`) return false;
+  const nodes = new Map(g.nodes.map((n) => [n.nodeId, n]));
+  for (const e of g.directedEdges) {
+    if (Math.abs(e.lengthMeters - e.lengthMm / 1000) > 1e-6) return false;
+    const a = nodes.get(e.fromNodeId), b = nodes.get(e.toNodeId);
+    if (!a || !b) return false;
+    const s = e.geometry[0], t = e.geometry[e.geometry.length - 1];
+    if (s[0] !== a.position[0] || s[1] !== a.position[1] || t[0] !== b.position[0] || t[1] !== b.position[1]) return false;
+  }
+  return (await computeContentHash(g)) === g.contentHash;
 }

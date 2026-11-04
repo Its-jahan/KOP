@@ -72,6 +72,7 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
       post({ id: m.id, ok: true, type: 'requirements', requirements: r.requirements, mainComponentEdgeIds: mainIds, ignoredSlivers: r.ignoredSlivers, ms: performance.now() - t0 });
     } else if (m.type === 'plan') {
       if (!gi) throw new Error('graph_not_loaded');
+      if (gi.g.contentHash !== m.meta.graphHash) throw new Error('graph_mismatch');
       const z = zoneInfoFor(m.zone);
       const observed = new Map(m.observed);
       const excluded = new Set(m.excluded);

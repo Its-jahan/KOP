@@ -10,7 +10,7 @@ new contract version.
 | `CANONICALIZATION.md` | Graph content-hash rule (RFC 8785 subset + SHA-256) |
 | `ALGORITHMS.md` | Normative behaviour (normaliser, zone clipping, planner, matcher, guidance) |
 | `CONFORMANCE.md` | How to run fixtures and compare outputs |
-| `fixtures/F01..F18*.json` | 18 golden fixtures (inputs + expected outputs + semantic assertions) |
+| `fixtures/F01..F20*.json` | 20 golden fixtures, revision 2 (inputs + expected outputs + semantic assertions) |
 | `vectors/jcs-vectors.json` | Canonical JSON / SHA-256 vectors (incl. Armenian, Persian, escapes, surrogate pairs) |
 
 Reference implementation: `web/src/core/*.ts` (pure TypeScript, no DOM). Where the

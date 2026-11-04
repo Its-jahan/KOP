@@ -13,19 +13,19 @@
    "appVersion": "0.1.0"
   },
   "graphRef": {
-   "graphId": "g-da29cebfdd7407c5",
-   "contentHash": "da29cebfdd7407c5e32f3ec62285efa0e9898f3d189232fd87ba1c9f566f2af5",
+   "graphId": "g-b24319348a44bdb1",
+   "contentHash": "b24319348a44bdb1afd690ff8c8c02cac5edf542abc9f6ea9e2d6a60e49dfa7a",
    "providerId": "fixture",
-   "normalizerVersion": "osm-normalizer-1.0.0",
+   "normalizerVersion": "osm-normalizer-1.1.0",
    "sourceDatasetVersion": "fixture",
    "attribution": "© OpenStreetMap contributors (ODbL 1.0)"
   },
   "graph": {
    "schemaVersion": "1.0.0",
-   "graphId": "g-da29cebfdd7407c5",
-   "contentHash": "da29cebfdd7407c5e32f3ec62285efa0e9898f3d189232fd87ba1c9f566f2af5",
+   "graphId": "g-b24319348a44bdb1",
+   "contentHash": "b24319348a44bdb1afd690ff8c8c02cac5edf542abc9f6ea9e2d6a60e49dfa7a",
    "providerId": "fixture",
-   "normalizerVersion": "osm-normalizer-1.0.0",
+   "normalizerVersion": "osm-normalizer-1.1.0",
    "sourceDatasetVersion": "fixture",
    "fetchedAt": "1970-01-01T00:00:00.000Z",
    "geographicExtent": {
@@ -167,8 +167,8 @@
   "session": {
    "schemaVersion": "1.0.0",
    "sessionId": "sess-fixture-17",
-   "graphId": "g-da29cebfdd7407c5",
-   "contentHash": "da29cebfdd7407c5e32f3ec62285efa0e9898f3d189232fd87ba1c9f566f2af5",
+   "graphId": "g-b24319348a44bdb1",
+   "contentHash": "b24319348a44bdb1afd690ff8c8c02cac5edf542abc9f6ea9e2d6a60e49dfa7a",
    "zone": {
     "zoneId": "zone-17",
     "zoneVersion": 1,
@@ -786,7 +786,7 @@
   }
  },
  "expectedAfterImport": {
-  "contentHash": "da29cebfdd7407c5e32f3ec62285efa0e9898f3d189232fd87ba1c9f566f2af5",
+  "contentHash": "b24319348a44bdb1afd690ff8c8c02cac5edf542abc9f6ea9e2d6a60e49dfa7a",
   "forwardUnion": [
    [
     0,
@@ -881,6 +881,39 @@
     }
    ],
    "expectedFirstError": "non_monotonic_event:sess-fixture-17:2"
+  },
+  {
+   "name": "length_meters_tampered",
+   "patch": [
+    {
+     "op": "replace",
+     "path": "/graph/directedEdges/0/lengthMeters",
+     "value": 1234.5
+    }
+   ],
+   "expectedFirstError": "graph_hash_mismatch"
+  },
+  {
+   "name": "requirements_tampered",
+   "patch": [
+    {
+     "op": "replace",
+     "path": "/session/requiredIntervals/0/endOffsetMeters",
+     "value": 130
+    }
+   ],
+   "expectedFirstError": "requirements_mismatch"
+  },
+  {
+   "name": "event_traversal_impossible_offset",
+   "patch": [
+    {
+     "op": "replace",
+     "path": "/events/2/payload/traversal/endOffsetMeters",
+     "value": 99999
+    }
+   ],
+   "expectedFirstError": "impossible_offsets:tr:x0:x2:osm:w80:n1-n2:f:0"
   },
   {
    "name": "corrupt_json",

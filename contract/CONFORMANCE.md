@@ -1,5 +1,7 @@
 # Conformance (contract 1.0.0)
 
+Fixture set revision 2 (after independent review): F01–F20 (F19 only_* through junction, F20 gap at a corner; new tracks in F01, F08, F10; new invalid cases in F17). Normaliser `osm-normalizer-1.1.0`, matcher `seq-matcher-1.1.0`.
+
 Each `fixtures/*.json` has a `kind`:
 
 - `graph`: run the pipeline on `input` and compare to `expected`:

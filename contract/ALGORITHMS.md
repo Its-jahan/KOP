@@ -10,11 +10,11 @@ fixtures compare exactly (graph, plans, matcher outputs). Constants:
 | Boundary inclusion tolerance | 0.01 m (boundary counts as inside) | zone.ts |
 | Minimum required interval | 1.0 m (shorter in-zone slivers ignored and counted) | requirements.ts |
 | STRICT_INSIDE traversable edge outside length | <= 2.0 m | requirements.ts |
-| Requirement covered | uncovered <= 4.0 m AND covered >= 50 % | requirements.ts |
+| Requirement covered | uncovered <= min(4.0 m, 25 % of its length) | requirements.ts |
 | Outside cost factor | edge cost + 9 x outside mm | planner.ts |
 | Turn penalties (mm) | straight(<30°) 0, right 5000, left 15000, sharp(>=150°) 30000, U-turn verified 60000, unverified 100000 | planner.ts |
 | Planner budget | 200000 settled states, 20 s (web/Android UI) | planner.ts |
-| Matcher | maxAccuracy 30 m, maxFixAge 10 s, maxGap 12 s, maxSpeed 50 m/s, search radius clamp(1.5*acc+5, 12, 45), minAdvance max(3, 0.5*acc), commit 12 m, ambiguity margin 6 m, junction path <= 80 m and <= 4 intermediate edges, moving if speed >= 1.0 m/s, heading used if speed >= 3 m/s, heading tolerance 60° (penalty 15) | matcher.ts |
+| Matcher | maxAccuracy 30 m, maxFixAge 10 s, maxFuture 5 s (clock skew → stale), maxGap 5 s (gap ends the run, no interpolation), jump speed 50 m/s, junction plausibility speed 30 m/s, search radius clamp(1.5*acc+5, 12, 45), minAdvance max(3, 0.5*acc) or max(3, acc) when the fix has no speed, commit 12 m, ambiguity margin 6 m, junction path <= 80 m and <= 4 intermediate edges, moving if (fix speed, else position speed over >= 3 s) >= 1.0 m/s, heading used if speed >= 3 m/s (tolerance 60°, penalty 15), a committed run flips direction only after 2 consecutive reverse fixes and never against a usable heading, an unconnected road closer by > 6 m for 2 consecutive fixes drops the anchor | matcher.ts |
 | Guidance | window = current step + next + steps within 120 m (max 12), 3 committed off-route fixes, off-route distance 25 m, offset slack 10 m | guidance.ts |
 
 ## 1. OSM normalisation (osm.ts)
@@ -44,7 +44,12 @@ fixtures compare exactly (graph, plans, matcher outputs). Constants:
   `restriction:conditional` (applied always, condition kept). `except` containing motorcar or
   motor_vehicle → ignored. Via node: every from-way edge ending at the via node × every to-way
   edge starting there. Via way(s): BFS along via-way edges (max 20) from each from-edge end to a
-  to-edge start. Unmappable relations are counted in `completenessNotes`.
+  to-edge start. Unmappable relations are counted in `completenessNotes`. When an `only_right_turn`,
+  `only_left_turn`, `only_straight_on` or `only_u_turn` relation yields several to-edges for the same
+  from/via (to-way passing through the junction), only the to-edge whose turn angle is closest to
+  +90/-90/0/180° is kept. `no_*` keeps all candidates (conservative).
+- Missing node references split a way into separate runs; nodes are never joined across a gap,
+  and the snapshot `dataState` becomes `incomplete`.
 
 ## 2. Legal transitions (graph.ts)
 - State = directed edge plus the longest suffix of the driven edge sequence that is a proper
@@ -73,7 +78,14 @@ still has remaining requirements only targets in that SCC are accepted (fallback
 traversed edge marks all requirements it completes (incidental coverage counts). Start: the start
 edge from the start offset to its end. Optional return-to-start. Unplanned requirements are listed
 with causes; status `partial` when anything is `not_reachable_from_start` or the budget is hit,
-`failed` when the start edge is not traversable. Plans never claim optimality.
+`failed` when the start edge is not traversable. A user-blocked start edge may be used for the start
+step only (the vehicle is already on it). Plans never claim optimality.
+
+## 6. Graph verification and import
+`verifyGraphHash` additionally requires `lengthMeters == lengthMm/1000` and edge geometry endpoints
+equal to their node positions; all computations use `lengthMm`. Import recomputes the required
+intervals from the session zone and graph and rejects any mismatch (`requirements_mismatch`), and
+checks every traversal (session and events) and exclusion reference.
 
 ## 5. Matcher (matcher.ts) and guidance (guidance.ts)
 See source; the fixtures F01, F08–F11 pin behaviour. Credit only after 12 m of consistent

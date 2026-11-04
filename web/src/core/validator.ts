@@ -53,7 +53,7 @@ export function validatePlan(
     }
     const e = gi.edges[ei];
     if (e.eligibility !== 'eligible') errors.push(`step_${k}_ineligible_edge:${e.eligibility}`);
-    if (blockedEdges.has(e.edgeId)) errors.push(`step_${k}_user_blocked_edge`);
+    if (blockedEdges.has(e.edgeId) && k > 0) errors.push(`step_${k}_user_blocked_edge`);
     if (s.fromOffsetMeters < -eps || s.toOffsetMeters > e.lengthMeters + eps || s.toOffsetMeters < s.fromOffsetMeters - eps) {
       errors.push(`step_${k}_bad_offsets`);
     }

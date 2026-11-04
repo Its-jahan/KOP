@@ -11,6 +11,7 @@ export type FailureInput =
   | { kind: 'graph_network_error' }
   | { kind: 'graph_timeout' }
   | { kind: 'graph_empty' }
+  | { kind: 'graph_incomplete' }
   | { kind: 'provider_not_configured' }
   | { kind: 'credentials_missing' }
   | { kind: 'graph_too_large'; edges: number; limit: number };
@@ -41,6 +42,8 @@ export function mapFailure(f: FailureInput): StateOutcome {
       return { ...base, gpsState: null, dataState: 'failed', code: 'network_unavailable' };
     case 'graph_timeout':
       return { ...base, gpsState: null, dataState: 'failed', code: 'provider_timeout' };
+    case 'graph_incomplete':
+      return { ...base, gpsState: null, dataState: 'incomplete', code: 'provider_partial_response' };
     case 'graph_empty':
       return { ...base, gpsState: null, dataState: 'area_unsupported', code: 'no_roads_in_area' };
     case 'provider_not_configured':

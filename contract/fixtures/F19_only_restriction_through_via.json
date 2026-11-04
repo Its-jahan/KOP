@@ -1,0 +1,428 @@
+{
+ "fixtureId": "F19_only_restriction_through_via",
+ "title": "only_* restriction with a to-way passing through the junction",
+ "description": "The branch matching the restriction direction stays the only legal exit.",
+ "contractVersion": "1.0.0",
+ "kind": "graph",
+ "input": {
+  "osm": {
+   "osm3s": {
+    "timestamp_osm_base": "fixture"
+   },
+   "elements": [
+    {
+     "type": "node",
+     "id": 1,
+     "lat": 40.18,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 2,
+     "lat": 40.18,
+     "lon": 44.5011758
+    },
+    {
+     "type": "node",
+     "id": 3,
+     "lat": 40.18,
+     "lon": 44.5023515
+    },
+    {
+     "type": "node",
+     "id": 4,
+     "lat": 40.1790956,
+     "lon": 44.5011758
+    },
+    {
+     "type": "node",
+     "id": 5,
+     "lat": 40.1790956,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 6,
+     "lat": 40.1790956,
+     "lon": 44.5023515
+    },
+    {
+     "type": "way",
+     "id": 401,
+     "nodes": [
+      1,
+      2,
+      3
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    },
+    {
+     "type": "way",
+     "id": 402,
+     "nodes": [
+      4,
+      2
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    },
+    {
+     "type": "way",
+     "id": 403,
+     "nodes": [
+      5,
+      4,
+      6
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    },
+    {
+     "type": "way",
+     "id": 404,
+     "nodes": [
+      1,
+      5
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    },
+    {
+     "type": "way",
+     "id": 405,
+     "nodes": [
+      3,
+      6
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    },
+    {
+     "type": "relation",
+     "id": 951,
+     "members": [
+      {
+       "type": "way",
+       "ref": 402,
+       "role": "from"
+      },
+      {
+       "type": "node",
+       "ref": 2,
+       "role": "via"
+      },
+      {
+       "type": "way",
+       "ref": 401,
+       "role": "to"
+      }
+     ],
+     "tags": {
+      "type": "restriction",
+      "restriction": "only_right_turn"
+     }
+    }
+   ]
+  },
+  "zone": {
+   "type": "polygon",
+   "coordinates": [
+    [
+     44.4994121,
+     40.1786434
+    ],
+    [
+     44.5029394,
+     40.1786434
+    ],
+    [
+     44.5029394,
+     40.1804522
+    ],
+    [
+     44.4994121,
+     40.1804522
+    ]
+   ]
+  },
+  "policies": [
+   "STRICT_INSIDE"
+  ],
+  "start": {
+   "edgeId": "osm:w402:n4-n2:f",
+   "offsetMeters": 0
+  },
+  "pathQueries": [
+   {
+    "name": "north_then_west",
+    "fromPrefix": [
+     "osm:w402:n4-n2:f"
+    ],
+    "toEdgeId": "osm:w401:n1-n2:b"
+   }
+  ]
+ },
+ "expected": {
+  "graph": {
+   "contentHash": "c9a94e5548a5731a6c66ebeffad0f1e2198f97ad91794e5315ba08b9346bcba9",
+   "graphId": "g-c9a94e5548a5731a",
+   "nodeCount": 6,
+   "edgeCount": 14,
+   "restrictionCount": 1,
+   "edgeIds": [
+    "osm:w401:n1-n2:b",
+    "osm:w401:n1-n2:f",
+    "osm:w401:n2-n3:b",
+    "osm:w401:n2-n3:f",
+    "osm:w402:n4-n2:b",
+    "osm:w402:n4-n2:f",
+    "osm:w403:n4-n6:b",
+    "osm:w403:n4-n6:f",
+    "osm:w403:n5-n4:b",
+    "osm:w403:n5-n4:f",
+    "osm:w404:n1-n5:b",
+    "osm:w404:n1-n5:f",
+    "osm:w405:n3-n6:b",
+    "osm:w405:n3-n6:f"
+   ],
+   "eligibility": {
+    "osm:w401:n1-n2:b": "eligible",
+    "osm:w401:n1-n2:f": "eligible",
+    "osm:w401:n2-n3:b": "eligible",
+    "osm:w401:n2-n3:f": "eligible",
+    "osm:w402:n4-n2:b": "eligible",
+    "osm:w402:n4-n2:f": "eligible",
+    "osm:w403:n4-n6:b": "eligible",
+    "osm:w403:n4-n6:f": "eligible",
+    "osm:w403:n5-n4:b": "eligible",
+    "osm:w403:n5-n4:f": "eligible",
+    "osm:w404:n1-n5:b": "eligible",
+    "osm:w404:n1-n5:f": "eligible",
+    "osm:w405:n3-n6:b": "eligible",
+    "osm:w405:n3-n6:f": "eligible"
+   },
+   "eligibilityReason": {},
+   "nodePassage": {},
+   "restrictions": [
+    {
+     "id": "osm:r951",
+     "kind": "only",
+     "from": "osm:w402:n4-n2:f",
+     "via": "osm:n2",
+     "to": "osm:w401:n2-n3:f"
+    }
+   ]
+  },
+  "requirements": [
+   {
+    "requirementId": "osm:w401:n1-n2:b#0",
+    "edgeId": "osm:w401:n1-n2:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w401:n1-n2:f#0",
+    "edgeId": "osm:w401:n1-n2:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w401:n2-n3:b#0",
+    "edgeId": "osm:w401:n2-n3:b",
+    "start": 0,
+    "end": 99.88,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w401:n2-n3:f#0",
+    "edgeId": "osm:w401:n2-n3:f",
+    "start": 0,
+    "end": 99.88,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w402:n4-n2:b#0",
+    "edgeId": "osm:w402:n4-n2:b",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w402:n4-n2:f#0",
+    "edgeId": "osm:w402:n4-n2:f",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w403:n4-n6:b#0",
+    "edgeId": "osm:w403:n4-n6:b",
+    "start": 0,
+    "end": 99.88,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w403:n4-n6:f#0",
+    "edgeId": "osm:w403:n4-n6:f",
+    "start": 0,
+    "end": 99.88,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w403:n5-n4:b#0",
+    "edgeId": "osm:w403:n5-n4:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w403:n5-n4:f#0",
+    "edgeId": "osm:w403:n5-n4:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w404:n1-n5:b#0",
+    "edgeId": "osm:w404:n1-n5:b",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w404:n1-n5:f#0",
+    "edgeId": "osm:w404:n1-n5:f",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w405:n3-n6:b#0",
+    "edgeId": "osm:w405:n3-n6:b",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w405:n3-n6:f#0",
+    "edgeId": "osm:w405:n3-n6:f",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   }
+  ],
+  "plans": {
+   "STRICT_INSIDE": {
+    "status": "complete",
+    "edgeSequence": [
+     "osm:w402:n4-n2:f",
+     "osm:w401:n2-n3:f",
+     "osm:w405:n3-n6:f",
+     "osm:w403:n4-n6:b",
+     "osm:w403:n5-n4:b",
+     "osm:w404:n1-n5:b",
+     "osm:w401:n1-n2:f",
+     "osm:w402:n4-n2:b",
+     "osm:w403:n4-n6:f",
+     "osm:w405:n3-n6:b",
+     "osm:w401:n2-n3:b",
+     "osm:w401:n1-n2:b",
+     "osm:w404:n1-n5:f",
+     "osm:w403:n5-n4:f"
+    ],
+    "stepKinds": [
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required"
+    ],
+    "turnarounds": [],
+    "coveredRequirementIds": [
+     "osm:w401:n1-n2:b#0",
+     "osm:w401:n1-n2:f#0",
+     "osm:w401:n2-n3:b#0",
+     "osm:w401:n2-n3:f#0",
+     "osm:w402:n4-n2:b#0",
+     "osm:w402:n4-n2:f#0",
+     "osm:w403:n4-n6:b#0",
+     "osm:w403:n4-n6:f#0",
+     "osm:w403:n5-n4:b#0",
+     "osm:w403:n5-n4:f#0",
+     "osm:w404:n1-n5:b#0",
+     "osm:w404:n1-n5:f#0",
+     "osm:w405:n3-n6:b#0",
+     "osm:w405:n3-n6:f#0"
+    ],
+    "unreachable": [],
+    "totals": {
+     "totalMeters": 1402.5,
+     "newCoverageMeters": 1402.5,
+     "repeatMeters": 0,
+     "outsideMeters": 0,
+     "approachMeters": 0
+    },
+    "valid": true,
+    "validationErrors": []
+   }
+  },
+  "paths": {
+   "north_then_west": [
+    "osm:w401:n2-n3:f",
+    "osm:w405:n3-n6:f",
+    "osm:w403:n4-n6:b",
+    "osm:w403:n5-n4:b",
+    "osm:w404:n1-n5:b",
+    "osm:w401:n1-n2:f",
+    "osm:w402:n4-n2:b",
+    "osm:w403:n4-n6:f",
+    "osm:w405:n3-n6:b",
+    "osm:w401:n2-n3:b",
+    "osm:w401:n1-n2:b"
+   ]
+  },
+  "tracks": {}
+ },
+ "assertions": [
+  {
+   "kind": "path_not_equal",
+   "path": "north_then_west",
+   "forbidden": [
+    "osm:w401:n1-n2:b"
+   ]
+  },
+  {
+   "kind": "plan_not_contains_sequence",
+   "policy": "STRICT_INSIDE",
+   "sequence": [
+    "osm:w402:n4-n2:f",
+    "osm:w401:n1-n2:b"
+   ]
+  },
+  {
+   "kind": "plan_valid",
+   "policy": "STRICT_INSIDE"
+  }
+ ],
+ "tolerances": {
+  "offsetMeters": 0.5,
+  "totalsMeters": 1
+ }
+}

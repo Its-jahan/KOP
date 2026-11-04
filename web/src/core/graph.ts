@@ -196,7 +196,8 @@ export class GraphIndex {
     return projectOnPolyline(this.edges[i].geometry, this.cum[i], p);
   }
 
+  /** Authoritative length (derived from hashed lengthMm, never from lengthMeters). */
   length(i: number): number {
-    return this.edges[i].lengthMeters;
+    return this.edges[i].lengthMm / 1000;
   }
 }

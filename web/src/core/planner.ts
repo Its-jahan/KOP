@@ -195,6 +195,9 @@ export function planCoverage(inp: PlannerInput): RoutePlan {
     if (r && gi.idx.has(r.edgeId)) blockedEdges.add(gi.idx.get(r.edgeId)!);
   }
   const allow = (i: number) => edgeTraversable(gi, zoneInfo, inp.policy, blockedEdges, i);
+  // The vehicle may already be on a road the user just reported blocked: it can still
+  // leave along its current edge, so the start edge is exempt for the start step only.
+  const allowStart = (i: number) => edgeTraversable(gi, zoneInfo, inp.policy, new Set(), i);
 
   const unreachable: UnreachableRequirement[] = [];
   const remainingByEdge = new Map<number, Set<string>>();
@@ -254,7 +257,7 @@ export function planCoverage(inp: PlannerInput): RoutePlan {
     status,
   });
 
-  if (startEdge === undefined || !allow(startEdge)) {
+  if (startEdge === undefined || !allowStart(startEdge)) {
     warnings.push('start_edge_not_traversable');
     for (const [, ids] of remainingByEdge) for (const id of ids) unreachable.push({ requirementId: id, cause: 'not_reachable_from_start' });
     return basePlan('failed', 0);

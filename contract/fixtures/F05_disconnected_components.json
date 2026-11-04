@@ -90,8 +90,8 @@
  },
  "expected": {
   "graph": {
-   "contentHash": "99e48d94fd13811e048e49a6bfd9eadc6972195ec686500abadd6843e7df36a0",
-   "graphId": "g-99e48d94fd13811e",
+   "contentHash": "7f6f15feb5836177c26280b364882f6c60b90a2e2372314e75fb6a9c974eda65",
+   "graphId": "g-7f6f15feb5836177",
    "nodeCount": 4,
    "edgeCount": 4,
    "restrictionCount": 0,

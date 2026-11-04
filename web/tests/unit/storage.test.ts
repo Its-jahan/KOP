@@ -50,4 +50,26 @@ describe('IndexedDB store', () => {
   it('reports unavailable IndexedDB explicitly', async () => {
     await expect(Store.open(null)).rejects.toBeInstanceOf(StorageError);
   });
+
+  it('maps quota exhaustion to an explicit storage error and keeps prior data', async () => {
+    const factory = new IDBFactory();
+    const s = await Store.open(factory);
+    await s.createSession(header('q'), [ev('q', 1)]);
+    const proto = Object.getPrototypeOf((globalThis as unknown as { IDBObjectStore: { prototype: object } }).IDBObjectStore.prototype) ? (globalThis as unknown as { IDBObjectStore: { prototype: { add: (...a: unknown[]) => unknown } } }).IDBObjectStore.prototype : null;
+    const orig = proto!.add;
+    proto!.add = function () {
+      throw new DOMException('quota', 'QuotaExceededError');
+    };
+    try {
+      const err = await s.appendEvents('q', [ev('q', 2)]).catch((e) => e);
+      expect(err).toBeInstanceOf(StorageError);
+      expect((err as StorageError).code).toBe('quota_exceeded');
+    } finally {
+      proto!.add = orig;
+    }
+    const q = await s.getSession('q');
+    expect(q!.events.map((e) => e.seq)).toEqual([1]);
+    expect(q!.header.lastSeq).toBe(1);
+  });
 });
+

@@ -2,10 +2,10 @@
 // The JSON Schema in /contract/schema is authoritative; these types mirror it.
 
 export const SCHEMA_VERSION = '1.0.0';
-export const NORMALIZER_VERSION = 'osm-normalizer-1.0.0';
+export const NORMALIZER_VERSION = 'osm-normalizer-1.1.0';
 export const PLANNER_ALGORITHM = 'greedy-nearest-legal';
 export const PLANNER_VERSION = '1.0.0';
-export const MATCHER_VERSION = 'seq-matcher-1.0.0';
+export const MATCHER_VERSION = 'seq-matcher-1.1.0';
 
 /** WGS84 [longitude, latitude], quantised to 1e-7 degrees. */
 export type LonLat = [number, number];

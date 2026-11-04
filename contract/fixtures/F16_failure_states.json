@@ -131,6 +131,17 @@
   },
   {
    "input": {
+    "kind": "graph_incomplete"
+   },
+   "expected": {
+    "canStartNavigation": false,
+    "gpsState": null,
+    "dataState": "incomplete",
+    "code": "provider_partial_response"
+   }
+  },
+  {
+   "input": {
     "kind": "graph_too_large",
     "edges": 90000,
     "limit": 60000

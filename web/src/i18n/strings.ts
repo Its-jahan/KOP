@@ -135,6 +135,11 @@ const en = {
   onto: 'onto',
   graphTooLarge: 'Zone too large for this device test limit',
   version: 'Version',
+  sessionOpenElsewhere: 'This session is open in another tab. Close it there first.',
+  outsideNeedsApproval: 'The new route needs more travel outside the zone than you approved',
+  approve: 'Approve',
+  recovered: 'The app was closed or reloaded while driving. Tap Resume; the route is recalculated from your real position.',
+  unsaved: 'events not yet saved',
 };
 
 export type Strings = typeof en;
@@ -274,6 +279,11 @@ const fa: Strings = {
   onto: 'به',
   graphTooLarge: 'محدوده برای حد آزموده‌شده این دستگاه بزرگ است',
   version: 'نسخه',
+  sessionOpenElsewhere: 'این جلسه در زبانه دیگری باز است. ابتدا آن را ببندید.',
+  outsideNeedsApproval: 'مسیر جدید بیش از مقدار تأییدشده بیرون از محدوده می‌رود',
+  approve: 'تأیید',
+  recovered: 'برنامه هنگام رانندگی بسته یا بارگذاری مجدد شد. «ادامه» را بزنید؛ مسیر از موقعیت واقعی شما دوباره محاسبه می‌شود.',
+  unsaved: 'رویداد هنوز ذخیره نشده',
 };
 
 export const STRINGS: Record<Lang, Strings> = { en, fa };

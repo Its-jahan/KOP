@@ -54,9 +54,15 @@ export async function fetchRoadGraph(
           last = { kind: 'graph_http', status: res.status };
           continue;
         }
-        const data = (await res.json()) as OverpassResponse;
+        const data = (await res.json()) as OverpassResponse & { remark?: string };
         if (!data || !Array.isArray(data.elements)) {
           last = { kind: 'graph_http', status: 502 };
+          continue;
+        }
+        // Overpass reports runtime errors (timeouts, memory) as HTTP 200 with a remark and a
+        // truncated element list. Never treat that as a complete graph.
+        if (typeof data.remark === 'string' && /error|timed out|out of memory/i.test(data.remark)) {
+          last = { kind: 'graph_incomplete' };
           continue;
         }
         if (!data.elements.some((e) => e.type === 'way')) throw new GraphFetchError({ kind: 'graph_empty' }, 'no roads');

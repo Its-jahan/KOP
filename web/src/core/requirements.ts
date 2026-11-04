@@ -7,7 +7,7 @@ import { bboxOf } from './geo';
 export const MIN_REQUIRED_INTERVAL_M = 1.0;
 /** Max outside length for an edge to count as inside under STRICT_INSIDE. */
 export const STRICT_OUTSIDE_TOL_M = 2.0;
-/** A requirement is complete when at most this much of it is unconfirmed (and >=50% confirmed). */
+/** A requirement is complete when at most min(4 m, 25 % of it) is unconfirmed. */
 export const COVERAGE_TOLERANCE_M = 4.0;
 
 export interface EdgeZoneInfo {
@@ -90,7 +90,7 @@ export function edgeTraversable(
 export function requirementCovered(union: Interval[], r: RequiredInterval, tol = COVERAGE_TOLERANCE_M): boolean {
   const covered = coveredWithin(union, r.startOffsetMeters, r.endOffsetMeters);
   const uncovered = r.lengthMeters - covered;
-  return uncovered <= tol && covered >= 0.5 * r.lengthMeters;
+  return uncovered <= Math.min(tol, 0.25 * r.lengthMeters);
 }
 
 export function requirementUncovered(union: Interval[], r: RequiredInterval): Interval[] {

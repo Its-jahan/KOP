@@ -25,7 +25,19 @@ export class MapView {
   private startMarker: Marker | null = null;
   private clickHandler: ((p: LonLat) => void) | null = null;
 
-  constructor(container: HTMLElement, center: LonLat = [44.5126, 40.1811], zoom = 12) {
+  constructor(container: HTMLElement) {
+    // Start from the last viewed area (per device) or a neutral world view; never a fixed city.
+    let center: LonLat = [20, 30];
+    let zoom = 1.5;
+    try {
+      const v = JSON.parse(localStorage.getItem('mapView') ?? 'null');
+      if (v && Array.isArray(v.c) && typeof v.z === 'number') {
+        center = v.c;
+        zoom = v.z;
+      }
+    } catch {
+      /* storage unavailable */
+    }
     this.map = new maplibregl.Map({
       container,
       style: osmRasterStyle(),
@@ -39,6 +51,14 @@ export class MapView {
     this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     this.map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     this.map.on('click', (e) => this.clickHandler?.([e.lngLat.lng, e.lngLat.lat]));
+    this.map.on('moveend', () => {
+      try {
+        const c = this.map.getCenter();
+        localStorage.setItem('mapView', JSON.stringify({ c: [c.lng, c.lat], z: this.map.getZoom() }));
+      } catch {
+        /* ignore */
+      }
+    });
     this.ready = new Promise((res) => this.map.on('load', () => {
       this.setup();
       res();

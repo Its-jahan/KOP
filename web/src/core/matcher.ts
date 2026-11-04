@@ -19,12 +19,22 @@ export interface MatcherConfig {
   minMovingSpeedMps: number;
   headingMinSpeedMps: number;
   headingToleranceDeg: number;
+  /** Fixes stamped further in the future than this are rejected (clock skew). */
+  maxFutureMs: number;
+  /** Speed cap used for junction interpolation plausibility. */
+  maxInterpolateSpeedMps: number;
+  /** Consecutive reverse-direction fixes needed to flip a committed run. */
+  reverseConfirmFixes: number;
+  /** Consecutive fixes much closer to an unconnected road before the anchor is dropped. */
+  parallelConflictFixes: number;
+  /** Window for estimating speed from positions when the fix has no speed. */
+  speedWindowMs: number;
 }
 
 export const DEFAULT_MATCHER_CONFIG: MatcherConfig = {
   maxAccuracyM: 30,
   maxFixAgeMs: 10_000,
-  maxGapMs: 12_000,
+  maxGapMs: 5_000,
   maxSpeedMps: 50,
   searchRadiusMinM: 12,
   searchRadiusMaxM: 45,
@@ -35,6 +45,11 @@ export const DEFAULT_MATCHER_CONFIG: MatcherConfig = {
   minMovingSpeedMps: 1.0,
   headingMinSpeedMps: 3,
   headingToleranceDeg: 60,
+  maxFutureMs: 5_000,
+  maxInterpolateSpeedMps: 30,
+  reverseConfirmFixes: 2,
+  parallelConflictFixes: 2,
+  speedWindowMs: 3_000,
 };
 
 export type GpsQuality = 'acquiring' | 'reliable' | 'weak_ambiguous' | 'stale' | 'off_graph';
@@ -65,10 +80,16 @@ export interface MatcherState {
   pendingLength: number;
   committed: boolean;
   recentIds: string[];
+  reverseStreak: number;
+  conflictStreak: number;
+  window: { t: number; lon: number; lat: number }[];
 }
 
 export function initialMatcherState(): MatcherState {
-  return { version: MATCHER_VERSION, anchor: null, lastFix: null, lastGoodT: null, pending: [], pendingLength: 0, committed: false, recentIds: [] };
+  return {
+    version: MATCHER_VERSION, anchor: null, lastFix: null, lastGoodT: null, pending: [], pendingLength: 0, committed: false, recentIds: [],
+    reverseStreak: 0, conflictStreak: 0, window: [],
+  };
 }
 
 export interface MatchResult {
@@ -94,6 +115,7 @@ function clone(s: MatcherState): MatcherState {
     lastFix: s.lastFix ? { ...s.lastFix } : null,
     pending: s.pending.map((p) => ({ ...p, obsIds: [...p.obsIds] })),
     recentIds: [...s.recentIds],
+    window: s.window.map((w) => ({ ...w })),
   };
 }
 
@@ -177,11 +199,16 @@ export function processObservation(
     st.pendingLength = 0;
     st.committed = false;
     st.anchor = null;
+    st.reverseStreak = 0;
+    st.conflictStreak = 0;
+    if (reason !== 'ambiguous' && reason !== 'off_graph') st.window = [];
     return hadAnchor ? { reason, fromT: st.lastGoodT, toT: obs.timestamp } : null;
   };
 
   const age = obs.ageMs ?? nowMs - obs.timestamp;
   if (age > cfg.maxFixAgeMs) return result('stale', { gap: breakAnchor('stale') });
+  // A fix stamped in the future (clock skew) must not become the ordering reference.
+  if (obs.timestamp - nowMs > cfg.maxFutureMs || age < -cfg.maxFutureMs) return result('stale', { gap: breakAnchor('stale') });
   const acc = obs.horizontalAccuracyMeters;
   if (acc === null || !(acc <= cfg.maxAccuracyM)) {
     return result('weak_ambiguous', { gap: breakAnchor('accuracy') });
@@ -198,6 +225,17 @@ export function processObservation(
     }
   }
   st.lastFix = { t: obs.timestamp, lon: obs.lon, lat: obs.lat, id: obs.observationId };
+  // Position-derived speed over >= speedWindowMs (used when the fix carries no speed).
+  let windowSpeed: number | null = null;
+  for (let k = st.window.length - 1; k >= 0; k--) {
+    const w = st.window[k];
+    if (obs.timestamp - w.t >= cfg.speedWindowMs) {
+      windowSpeed = (haversine([w.lon, w.lat], p) / (obs.timestamp - w.t)) * 1000;
+      break;
+    }
+  }
+  st.window.push({ t: obs.timestamp, lon: obs.lon, lat: obs.lat });
+  if (st.window.length > 12) st.window.shift();
 
   const radius = Math.max(cfg.searchRadiusMinM, Math.min(cfg.searchRadiusMaxM, acc * 1.5 + 5));
   const cands: Cand[] = [];
@@ -207,14 +245,15 @@ export function processObservation(
   }
   if (cands.length === 0) return result('off_graph', { gap: gap ?? breakAnchor('off_graph') });
 
-  const moving = obs.speedMps === null ? null : obs.speedMps >= cfg.minMovingSpeedMps;
+  const speedEstimate = obs.speedMps ?? windowSpeed;
+  const moving = speedEstimate === null ? null : speedEstimate >= cfg.minMovingSpeedMps;
   const headingUsable = obs.speedMps !== null && obs.speedMps >= cfg.headingMinSpeedMps && obs.bearingDeg !== null;
   const headingPenalty = (c: Cand) => {
     if (!headingUsable) return 0;
     const b = bearingAtOffset(gi.edges[c.edge].geometry, gi.cum[c.edge], c.offset);
     return Math.abs(angleDiff(b, obs.bearingDeg!)) > cfg.headingToleranceDeg ? 15 : 0;
   };
-  const minAdvance = Math.max(cfg.minAdvanceM, acc * 0.5);
+  const minAdvance = Math.max(cfg.minAdvanceM, obs.speedMps === null ? acc : acc * 0.5);
   const physOf = (i: number) => gi.edges[i].physicalSegmentId;
   const matchedOut = (edge: number, offset: number, point: LonLat) => ({
     edgeId: gi.edges[edge].edgeId, offset, point, committed: st.committed,
@@ -225,7 +264,7 @@ export function processObservation(
     const anLen = gi.length(an.edge);
     const anPoint = gi.edges[an.edge].geometry.length ? pointOn(gi, an.edge, an.offset) : p;
     const dtS = Math.max(0.001, (obs.timestamp - an.t) / 1000);
-    const maxTravel = cfg.maxSpeedMps * dtS + 2 * acc + 10;
+    const maxTravel = Math.min(cfg.maxSpeedMps, cfg.maxInterpolateSpeedMps) * dtS + 2 * acc + 10;
     type Option = { c: Cand; score: number; pieces: Omit<Piece, 'obsIds' | 't0' | 't1'>[]; advance: number; reverse: boolean };
     const options: Option[] = [];
     for (const c of cands) {
@@ -269,11 +308,38 @@ export function processObservation(
       if (rival && best.c.edge !== an.edge && physOf(best.c.edge) !== physOf(an.edge)) {
         return result('weak_ambiguous', { gap: breakAnchor('ambiguous') });
       }
+      // A road with no legal continuity from the anchor is clearly closer: the anchor may be
+      // on the wrong (parallel) road. Withhold credit; drop the anchor if it persists.
+      const reachable = new Set(options.map((o) => physOf(o.c.edge)));
+      let nearestOther = Infinity;
+      for (const c of cands) if (!reachable.has(physOf(c.edge)) && c.dist < nearestOther) nearestOther = c.dist;
+      if (best.c.dist - nearestOther > cfg.ambiguityMarginM) {
+        st.conflictStreak++;
+        if (st.conflictStreak < cfg.parallelConflictFixes) return result('weak_ambiguous', { gap });
+        gap = gap ?? breakAnchor('ambiguous');
+        return reanchor(gap);
+      }
+      st.conflictStreak = 0;
       const stationary = (moving === false) || Math.abs(best.advance) < minAdvance;
       if (stationary) {
+        an.t = obs.timestamp; // still at the anchor; keeps interpolation windows short
+        st.reverseStreak = 0;
         return result('reliable', { matched: matchedOut(an.edge, an.offset, pointOn(gi, an.edge, an.offset)), gap });
       }
       if (best.reverse && best.c.edge !== an.edge) {
+        // Reversal on the same physical segment. A heading that contradicts it, or a single
+        // fix on a committed run, is treated as noise (no credit, anchor unchanged).
+        if (headingUsable) {
+          const b = bearingAtOffset(gi.edges[best.c.edge].geometry, gi.cum[best.c.edge], best.c.offset);
+          if (Math.abs(angleDiff(b, obs.bearingDeg!)) > 90) {
+            st.reverseStreak = 0;
+            return result('weak_ambiguous', { matched: matchedOut(an.edge, an.offset, pointOn(gi, an.edge, an.offset)), gap });
+          }
+        }
+        if (st.committed && ++st.reverseStreak < cfg.reverseConfirmFixes) {
+          return result('weak_ambiguous', { matched: matchedOut(an.edge, an.offset, pointOn(gi, an.edge, an.offset)), gap });
+        }
+        st.reverseStreak = 0;
         // direction flip on the same physical segment
         if (!st.committed) {
           st.pending = [];
@@ -299,6 +365,7 @@ export function processObservation(
         // backward movement on a one-way edge without reciprocal: treat as noise
         return result('weak_ambiguous', { matched: matchedOut(an.edge, an.offset, pointOn(gi, an.edge, an.offset)), gap });
       }
+      st.reverseStreak = 0;
       for (const pc of best.pieces) {
         if (pc.b - pc.a <= 0) continue;
         st.pending.push({ ...pc, obsIds: [an.obsId, obs.observationId], t0: an.t, t1: obs.timestamp });
@@ -312,17 +379,22 @@ export function processObservation(
     }
   }
 
-  // (Re)anchor
-  const scored = cands.map((c) => ({ c, score: c.dist + headingPenalty(c) })).sort((x, y) => x.score - y.score || x.c.edge - y.c.edge);
-  const best = scored[0];
-  const rival = scored.find((o) => physOf(o.c.edge) !== physOf(best.c.edge) && o.score - best.score < cfg.ambiguityMarginM);
-  if (rival) return result('weak_ambiguous', { gap });
-  st.anchor = { edge: best.c.edge, offset: best.c.offset, t: obs.timestamp, obsId: obs.observationId };
-  st.lastGoodT = obs.timestamp;
-  st.committed = false;
-  st.pending = [];
-  st.pendingLength = 0;
-  return result('reliable', { matched: matchedOut(best.c.edge, best.c.offset, best.c.point), gap });
+  return reanchor(gap);
+
+  function reanchor(g: MatchResult['gap']): MatchResult {
+    const scored = cands.map((c) => ({ c, score: c.dist + headingPenalty(c) })).sort((x, y) => x.score - y.score || x.c.edge - y.c.edge);
+    const best = scored[0];
+    const rival = scored.find((o) => physOf(o.c.edge) !== physOf(best.c.edge) && o.score - best.score < cfg.ambiguityMarginM);
+    if (rival) return result('weak_ambiguous', { gap: g });
+    st.anchor = { edge: best.c.edge, offset: best.c.offset, t: obs.timestamp, obsId: obs.observationId };
+    st.lastGoodT = obs.timestamp;
+    st.committed = false;
+    st.pending = [];
+    st.pendingLength = 0;
+    st.reverseStreak = 0;
+    st.conflictStreak = 0;
+    return result('reliable', { matched: matchedOut(best.c.edge, best.c.offset, best.c.point), gap: g });
+  }
 }
 
 function pointOn(gi: GraphIndex, edge: number, offset: number): LonLat {

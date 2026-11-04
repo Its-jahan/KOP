@@ -39,7 +39,7 @@ interface PreparedZone {
 }
 
 interface StartChoice { requested: LonLat; edgeId: string; offset: number; position: LonLat; distance: number; confirmed: boolean }
-interface PlanResult { plan: RoutePlan; validation: { ok: boolean; errors: string[] }; ms: number }
+interface PlanResult { plan: RoutePlan; validation: { ok: boolean; errors: string[] }; ms: number; inputKey: string }
 
 function useStrings(lang: Lang) {
   return STRINGS[lang];
@@ -71,6 +71,8 @@ export function App() {
   const [approveOutside, setApproveOutside] = useState(false);
   const [zoneVersion, setZoneVersion] = useState(1);
   const abortRef = useRef<AbortController | null>(null);
+  const driveEngineRef = useRef<Engine | null>(null);
+  const releaseLockRef = useRef<(() => void) | null>(null);
 
   // drive state
   const [drive, setDrive] = useState<DriveController | null>(null);
@@ -151,6 +153,7 @@ export function App() {
     if (!mv) return;
     if (tab !== 'prepare') return mv.onClick(null);
     mv.onClick((p) => {
+      if (planning) return;
       if (pickStart) {
         chooseStart(p);
         return;
@@ -259,8 +262,13 @@ export function App() {
   }
 
   // ---------- plan ----------
+  const planInputKey = JSON.stringify([prepared?.graph.contentHash, zoneVersion, zoneDef, policy, returnToStart, start?.edgeId, start?.offset, start?.confirmed]);
+  const planKeyRef = useRef(planInputKey);
+  planKeyRef.current = planInputKey;
+
   async function makePlan() {
     if (!prepared || !start?.confirmed || !zoneDef || !engineRef.current) return;
+    const requestKey = planInputKey;
     setPlanning(true);
     setPlan(null);
     setApproveOutside(false);
@@ -270,7 +278,9 @@ export function App() {
         start: { edgeId: start.edgeId, offsetMeters: start.offset, source: 'selected_start' }, returnToStart, timeBudgetMs: 20_000,
         meta: { planId: crypto.randomUUID(), graphHash: prepared.graph.contentHash, zoneVersion, progressRevision: 0, planningRevision: 1, createdAt: new Date().toISOString() },
       });
-      setPlan({ plan: r.plan, validation: r.validation, ms: r.ms });
+      // Discard results for inputs that changed while the worker was computing.
+      if (planKeyRef.current !== requestKey) return;
+      setPlan({ plan: r.plan, validation: r.validation, ms: r.ms, inputKey: requestKey });
       void mapRef.current?.setData('route', routeFeatures(prepared.gi, r.plan));
     } catch (e) {
       if ((e as Error).message !== 'cancelled') setToast(String((e as Error).message));
@@ -287,10 +297,13 @@ export function App() {
   const startBlockers: string[] = [];
   if (!prepared) startBlockers.push(t.reasonNoGraph);
   else if (prepared.graph.dataState === 'synthetic_test_fixture') startBlockers.push(t.reasonFixture);
+  else if (prepared.graph.dataState !== 'available') startBlockers.push(`${t.graphFailed}: ${prepared.graph.dataState}`);
+  if (planning) startBlockers.push(t.planning);
   if (!start?.confirmed) startBlockers.push(t.reasonNoStart);
   if (!plan) startBlockers.push(t.reasonNoPlan);
   else {
     if (!plan.validation.ok || plan.plan.status === 'failed') startBlockers.push(t.reasonPlanInvalid);
+    if (plan.inputKey !== planInputKey) startBlockers.push(t.reasonNoPlan);
     if (plan.plan.totals.outsideMeters > 2 && !approveOutside) startBlockers.push(t.reasonOutside);
   }
   if (!store) startBlockers.push(storeError ?? 'storage');
@@ -338,10 +351,32 @@ export function App() {
   }
 
   async function openDrive(header: SessionHeader, events: SessionEvent[], graph: GraphSnapshot, gi: GraphIndex, zoneInfo: EdgeZoneInfo[], autoStart: boolean) {
-    if (!store || !engineRef.current) return;
+    if (!store) return;
     drive?.dispose();
-    await engineRef.current.loadGraph(graph);
-    const dc = new DriveController(store, engineRef.current, graph, gi, zoneInfo, header, events);
+    releaseLockRef.current?.();
+    releaseLockRef.current = null;
+    // One tab per session: concurrent writers would break the event sequence.
+    if (navigator.locks) {
+      const got = await new Promise<boolean>((resolve) => {
+        void navigator.locks.request(`session:${header.sessionId}`, { ifAvailable: true }, (lock) => {
+          if (!lock) {
+            resolve(false);
+            return undefined;
+          }
+          resolve(true);
+          return new Promise<void>((release) => (releaseLockRef.current = release));
+        });
+      });
+      if (!got) {
+        setToast(t.sessionOpenElsewhere);
+        return;
+      }
+    }
+    // A dedicated worker per driving session: preparing another zone can never swap its graph.
+    driveEngineRef.current?.dispose();
+    driveEngineRef.current = new Engine();
+    await driveEngineRef.current.loadGraph(graph);
+    const dc = new DriveController(store, driveEngineRef.current, graph, gi, zoneInfo, header, events);
     setDrive(dc);
     setDriveGi(gi);
     dc.subscribe(setDriveSnap);
@@ -354,6 +389,7 @@ export function App() {
     const bb = bboxOf(ring);
     void mapRef.current?.fitBbox([bb.west, bb.south, bb.east, bb.north]);
     if (autoStart) await dc.startOrResume();
+    else await dc.recoverIfInterrupted();
   }
 
   async function resumeSession(h: SessionHeader) {
@@ -454,6 +490,14 @@ export function App() {
     for (const tr of pkg.session.confirmedTraversals) {
       if (!seenTr.has(tr.traversalId)) events.push({ eventId: `${sessionId}:imp:${++seq}`, seq, sessionId, type: 'traversal_confirmed', timestamp: tr.timestampEnd, schemaVersion: SCHEMA_VERSION, payload: { traversal: tr } });
     }
+    // Exclusions recorded only in the session document become explicit events.
+    const replayed = applyEvents(emptyProgress(), events, { sessionId, graphHash: r.graph.contentHash, edgeLengths: new Map(r.graph.directedEdges.map((e) => [e.edgeId, e.lengthMm / 1000])) });
+    const activeNow = new Set([...replayed.exclusions.values()].filter((x) => x.active).map((x) => x.requirementId));
+    for (const x of pkg.session.exclusions) {
+      if (x.active && !activeNow.has(x.requirementId)) {
+        events.push({ eventId: `${sessionId}:imp:${++seq}`, seq, sessionId, type: 'requirement_excluded', timestamp: x.at, schemaVersion: SCHEMA_VERSION, payload: { requirementIds: [x.requirementId], reason: x.reason, note: x.note } });
+      }
+    }
     const header: SessionHeader = {
       schemaVersion: SCHEMA_VERSION, sessionId, graphId: r.graph.graphId, contentHash: r.graph.contentHash, zone: pkg.session.zone, vehicleProfile: 'passenger_car',
       boundaryPolicy: pkg.session.boundaryPolicy, returnToStart: pkg.session.returnToStart, startSelection: pkg.session.startSelection, createdAt: pkg.session.createdAt,
@@ -461,7 +505,8 @@ export function App() {
       requirements: pkg.session.requiredIntervals.map((x) => ({ ...x, status: x.status === 'needsReview' ? 'needsReview' : 'unvisited' })),
       label: `${pkg.exporter.platform} ${pkg.exportedAt.slice(0, 16)}`,
     };
-    if (header.status === 'paused' && !events.some((e) => e.type === 'paused')) {
+    const finalStatus = applyEvents(emptyProgress(), events, { sessionId, graphHash: r.graph.contentHash, edgeLengths: new Map(r.graph.directedEdges.map((e) => [e.edgeId, e.lengthMm / 1000])) }).status;
+    if (finalStatus === 'active' || (header.status === 'paused' && finalStatus !== 'paused')) {
       events.push({ eventId: `${sessionId}:imp:${++seq}`, seq, sessionId, type: 'paused', timestamp: Date.now(), schemaVersion: SCHEMA_VERSION, payload: { reason: 'imported' } });
       header.lastSeq = seq;
     }
@@ -528,10 +573,10 @@ export function App() {
             </section>
             <section>
               <h3>{t.boundaryPolicy}</h3>
-              <label className="row"><input type="radio" checked={policy === 'STRICT_INSIDE'} onChange={() => setPolicy('STRICT_INSIDE')} /> {t.strictInside}</label>
-              <label className="row"><input type="radio" checked={policy === 'ALLOW_NECESSARY_CONNECTORS'} onChange={() => setPolicy('ALLOW_NECESSARY_CONNECTORS')} /> {t.allowConnectors}</label>
+              <label className="row"><input type="radio" disabled={planning} checked={policy === 'STRICT_INSIDE'} onChange={() => setPolicy('STRICT_INSIDE')} /> {t.strictInside}</label>
+              <label className="row"><input type="radio" disabled={planning} checked={policy === 'ALLOW_NECESSARY_CONNECTORS'} onChange={() => setPolicy('ALLOW_NECESSARY_CONNECTORS')} /> {t.allowConnectors}</label>
               {policy === 'ALLOW_NECESSARY_CONNECTORS' && <p className="hint">{t.allowConnectorsWarn}</p>}
-              <label className="row"><input type="checkbox" checked={returnToStart} onChange={(e) => { setReturnToStart(e.target.checked); setPlan(null); }} /> {t.returnToStart}</label>
+              <label className="row"><input type="checkbox" disabled={planning} checked={returnToStart} onChange={(e) => { setReturnToStart(e.target.checked); setPlan(null); }} /> {t.returnToStart}</label>
             </section>
             <section>
               <h3>{t.roadData}</h3>
@@ -553,7 +598,7 @@ export function App() {
               <section>
                 <h3>{t.start}</h3>
                 <div className="row">
-                  <button className={pickStart ? 'on' : ''} onClick={() => setPickStart(true)} data-testid="pick-start">{t.tapForStart}</button>
+                  <button className={pickStart ? 'on' : ''} disabled={planning} onClick={() => setPickStart(true)} data-testid="pick-start">{t.tapForStart}</button>
                   <button onClick={useMyLocation}>{t.useMyLocation}</button>
                 </div>
                 {startMsg && <p className="err">{startMsg}</p>}
@@ -683,13 +728,13 @@ function DrivePanel({ t, lang, snap, dc, onToast }: { t: Strings; lang: Lang; sn
     : snap.gpsSource === 'permission_denied' ? t.permissionDenied
     : snap.gpsSource === 'location_unavailable' ? t.locationOff
     : snap.gpsSource === 'insecure_context' ? t.insecure
-    : fixAge !== null && fixAge > 10 ? t.stale
+    : fixAge !== null && (fixAge > 10 || fixAge < -5) ? t.stale
     : snap.quality === 'reliable' ? t.reliable
     : snap.quality === 'weak_ambiguous' ? t.weak
     : snap.quality === 'off_graph' ? t.offGraph
     : t.acquiring;
-  const gpsClass = snap.quality === 'reliable' && fixAge !== null && fixAge <= 10 && snap.status === 'active' ? 'ok' : 'warn';
-  const nm = snap.nextManeuver;
+  const gpsClass = snap.quality === 'reliable' && fixAge !== null && fixAge <= 10 && fixAge >= -5 && snap.status === 'active' ? 'ok' : 'warn';
+  const nm = fixAge !== null && fixAge <= 5 && fixAge >= -5 && snap.status === 'active' ? snap.nextManeuver : null;
   return (
     <aside className="panel drive" data-testid="drive-panel">
       <div className={`gps ${gpsClass}`} data-testid="gps-state">
@@ -698,6 +743,12 @@ function DrivePanel({ t, lang, snap, dc, onToast }: { t: Strings; lang: Lang; sn
       </div>
       <div className="maneuver" data-testid="maneuver">
         {snap.replanning ? <span>{t.replanning}</span>
+          : snap.pendingOutsidePlan ? (
+            <span className="warn">
+              {t.outsideNeedsApproval}: {fmtMeters(snap.pendingOutsidePlan.outsideMeters, t, lang)} ({fmtMeters(snap.pendingOutsidePlan.approvedMeters, t, lang)})
+              {' '}<button onClick={() => { if (confirm(`${t.outsideNeedsApproval}: ${fmtMeters(snap.pendingOutsidePlan!.outsideMeters, t, lang)}`)) void dc.approvePendingOutside(); }}>{t.approve}</button>
+            </span>
+          )
           : snap.notice === 'outside_policy' ? <span className="warn">{t.outsideZoneStop}</span>
           : snap.notice === 'finished' ? <span>{t.finished}</span>
           : nm ? (
@@ -712,6 +763,8 @@ function DrivePanel({ t, lang, snap, dc, onToast }: { t: Strings; lang: Lang; sn
           ) : <span className="muted">{t.noGuidance}</span>}
       </div>
       {snap.notice === 'hidden_gap' && <p className="warn small">{t.hiddenWarning}</p>}
+      {snap.notice === 'recovered' && <p className="warn small" data-testid="recovered">{t.recovered}</p>}
+      {snap.unsavedEvents > 0 && <p className="err small">{fmtNum(snap.unsavedEvents, lang)} {t.unsaved}</p>}
       {snap.notice === 'storage_error' && <p className="err small">{t.storage}: {snap.storageError}</p>}
       <div className="progress" data-testid="progress">
         <div className="bar"><div style={{ width: `${Math.min(100, m.percentConfirmed)}%` }} /></div>

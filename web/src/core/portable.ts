@@ -4,7 +4,9 @@
 import Ajv2020 from 'ajv/dist/2020';
 import schema from '../../../contract/schema/coverage-contract-1.0.0.schema.json';
 import { verifyGraphHash } from './hash';
-import { SCHEMA_VERSION, type CoverageSession, type GraphSnapshot, type SessionEvent } from './types';
+import { SCHEMA_VERSION, type CoverageSession, type GraphSnapshot, type MatchedTraversal, type SessionEvent } from './types';
+import { GraphIndex } from './graph';
+import { computeRequirements } from './requirements';
 
 export interface SessionExportPackage {
   packageType: 'coverage-session-export';
@@ -107,20 +109,40 @@ export async function validateImport(raw: string, knownGraphs: (hash: string) =>
   if (pkg.session.contentHash !== pkg.graphRef.contentHash) errors.push('session_graph_mismatch');
   if (pkg.session.schemaVersion !== SCHEMA_VERSION) errors.push('session_schema_version');
   if (graph) {
-    const len = new Map(graph.directedEdges.map((e) => [e.edgeId, e.lengthMeters]));
+    const len = new Map(graph.directedEdges.map((e) => [e.edgeId, e.lengthMm / 1000]));
     const eps = 0.01;
-    for (const r of pkg.session.requiredIntervals) {
-      const L = len.get(r.edgeId);
-      if (L === undefined) errors.push(`unknown_edge:${r.edgeId}`);
-      else if (r.startOffsetMeters < -eps || r.endOffsetMeters > L + eps || r.endOffsetMeters <= r.startOffsetMeters) errors.push(`impossible_offsets:${r.requirementId}`);
+    const checkTraversal = (t: MatchedTraversal | undefined, where: string) => {
+      const L = t ? len.get(t.edgeId) : undefined;
+      if (!t || L === undefined) errors.push(`unknown_edge:${where}`);
+      else if (!(t.startOffsetMeters >= -eps && t.endOffsetMeters <= L + eps && t.endOffsetMeters > t.startOffsetMeters)) errors.push(`impossible_offsets:${t.traversalId}`);
+    };
+    // Requirements must be exactly what this zone + graph produce (no silent denominator change).
+    try {
+      const expected = computeRequirements(new GraphIndex(graph), pkg.session.zone.definition).requirements;
+      const got = new Map(pkg.session.requiredIntervals.map((r) => [r.requirementId, r]));
+      if (expected.length !== got.size) errors.push('requirements_mismatch');
+      else
+        for (const r of expected) {
+          const g = got.get(r.requirementId);
+          if (!g || g.edgeId !== r.edgeId || Math.abs(g.startOffsetMeters - r.startOffsetMeters) > 0.05 || Math.abs(g.endOffsetMeters - r.endOffsetMeters) > 0.05) {
+            errors.push('requirements_mismatch');
+            break;
+          }
+        }
+    } catch {
+      errors.push('zone_invalid');
     }
-    for (const t of pkg.session.confirmedTraversals) {
-      const L = len.get(t.edgeId);
-      if (L === undefined) errors.push(`unknown_edge:${t.edgeId}`);
-      else if (t.startOffsetMeters < -eps || t.endOffsetMeters > L + eps || t.endOffsetMeters <= t.startOffsetMeters) errors.push(`impossible_offsets:${t.traversalId}`);
-    }
+    for (const t of pkg.session.confirmedTraversals) checkTraversal(t, t.edgeId);
+    for (const e of pkg.events) if (e.type === 'traversal_confirmed') checkTraversal(e.payload?.traversal as MatchedTraversal | undefined, e.eventId);
     const reqIds = new Set(pkg.session.requiredIntervals.map((r) => r.requirementId));
     for (const x of pkg.session.exclusions) if (!reqIds.has(x.requirementId)) errors.push(`unknown_exclusion:${x.requirementId}`);
+    for (const e of pkg.events) {
+      if (e.type === 'requirement_excluded' || e.type === 'requirement_restored') {
+        const ids = e.payload?.requirementIds;
+        if (!Array.isArray(ids) || ids.some((id) => !reqIds.has(id as string))) errors.push(`unknown_exclusion:${e.eventId}`);
+      }
+    }
+    if (pkg.session.graphId !== graph.graphId) errors.push('session_graph_mismatch');
   }
   let lastSeq = 0;
   for (const e of pkg.events) {

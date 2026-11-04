@@ -28,7 +28,10 @@ export interface DriveSnapshot {
   statuses: Map<string, RequirementStatus>;
   progress: DerivedProgress;
   replanning: boolean;
-  notice: 'none' | 'off_route' | 'outside_policy' | 'finished' | 'hidden_gap' | 'storage_error' | 'plan_failed';
+  notice: 'none' | 'off_route' | 'outside_policy' | 'finished' | 'hidden_gap' | 'storage_error' | 'plan_failed' | 'outside_needs_approval' | 'recovered';
+  /** A replanned route that adds outside travel beyond what the user approved. */
+  pendingOutsidePlan: { outsideMeters: number; approvedMeters: number } | null;
+  unsavedEvents: number;
   wakeLock: 'held' | 'released' | 'unsupported' | 'refused' | 'idle';
   storageError: string | null;
   trail: LonLat[];
@@ -52,6 +55,12 @@ export class DriveController {
   private writeChain: Promise<unknown> = Promise.resolve();
   private snap: DriveSnapshot;
   private hiddenAt: number | null = null;
+  /** Events assigned a sequence number but not yet stored (retried in order). */
+  private unsaved: SessionEvent[] = [];
+  private unsavedPatch: Partial<SessionHeader> = {};
+  private timer: ReturnType<typeof setInterval>;
+  private pendingPlan: RoutePlan | null = null;
+  private approvedOutsideMeters: number;
 
   constructor(
     private readonly store: Store,
@@ -64,15 +73,21 @@ export class DriveController {
   ) {
     this.header = header;
     this.progress = applyEvents(emptyProgress(), events, this.ctx());
-    if (this.progress.plan) this.adoptPlan(this.progress.plan, true);
+    const created = events.find((e) => e.type === 'session_created');
+    this.approvedOutsideMeters = Number(created?.payload.approvedOutsideMeters ?? 0);
+    // Only a fresh session follows its preview plan. A resumed/recovered session never
+    // continues an old route from an obsolete cursor: it replans from the real position.
+    const fresh = this.progress.status === 'ready';
+    if (this.progress.plan && fresh) this.adoptPlan(this.progress.plan, true);
     this.latestRequested = this.progress.planningRevision;
     const { metrics, statuses } = computeMetrics(header.requirements, this.progress);
     this.snap = {
       status: this.progress.status === 'ready' ? header.status : this.progress.status,
-      gpsSource: 'idle', quality: 'acquiring', lastFix: null, matched: null, plan: this.progress.plan, planValid: true,
+      gpsSource: 'idle', quality: 'acquiring', lastFix: null, matched: null, plan: fresh ? this.progress.plan : null, planValid: true,
       cursor: 0, nextManeuver: null, metrics, statuses, progress: this.progress, replanning: false, notice: 'none',
-      wakeLock: 'idle', storageError: null, trail: [],
+      wakeLock: 'idle', storageError: null, trail: [], pendingOutsidePlan: null, unsavedEvents: 0,
     };
+    this.timer = setInterval(() => this.tick(), 1000);
     this.gps = new BrowserGps({ onFix: (o) => this.onFix(o), onState: (s) => this.update({ gpsSource: s }) });
     this.wake = new WakeLockKeeper((w) => this.update({ wakeLock: w }));
     document.addEventListener('visibilitychange', this.onVisibility);
@@ -98,7 +113,18 @@ export class DriveController {
     this.update({ metrics, statuses, progress: this.progress, status: this.progress.status === 'ready' ? this.header.status : this.progress.status });
   }
 
-  /** Persist events in order; each call is one IndexedDB transaction. */
+  /**
+   * After a reload/kill the log may end in 'active'. Record the interruption as a pause so
+   * the UI offers an explicit Resume (GPS restarts only from a user action).
+   */
+  async recoverIfInterrupted() {
+    if (this.progress.status !== 'active') return;
+    await this.persist([{ type: 'paused', payload: { reason: 'interrupted' } }], { status: 'paused' });
+    this.update({ notice: 'recovered', quality: 'paused' });
+    this.recompute();
+  }
+
+  /** Persist events in order. Failed writes stay queued and are retried in order. */
   private persist(types: { type: SessionEventType; payload: Record<string, unknown>; timestamp?: number }[], patch: Partial<SessionHeader> = {}) {
     const events: SessionEvent[] = types.map((t) => ({
       eventId: `${this.header.sessionId}:${crypto.randomUUID()}`,
@@ -113,20 +139,47 @@ export class DriveController {
     let seq = this.progress.lastSeq;
     for (const e of events) e.seq = ++seq;
     this.progress = applyEvents(this.progress, events, this.ctx());
+    this.unsaved.push(...events);
+    this.unsavedPatch = { ...this.unsavedPatch, ...patch };
+    return this.flush();
+  }
+
+  private flush() {
     const job = this.writeChain.then(async () => {
+      if (!this.unsaved.length) return;
+      const batch = this.unsaved.slice();
+      const patch = this.unsavedPatch;
       try {
-        this.header = await this.store.appendEvents(this.header.sessionId, events, patch);
+        this.header = await this.store.appendEvents(this.header.sessionId, batch, patch);
+        this.unsaved.splice(0, batch.length);
+        this.unsavedPatch = {};
+        if (this.snap.notice === 'storage_error') this.update({ notice: 'none', storageError: null });
       } catch (e) {
         this.update({ notice: 'storage_error', storageError: (e as Error).message });
       }
+      this.update({ unsavedEvents: this.unsaved.length });
     });
     this.writeChain = job;
     return job;
   }
 
+  /** 1 Hz housekeeping: retry unsaved writes and drop guidance that went stale. */
+  private tick() {
+    if (this.unsaved.length) void this.flush();
+    const f = this.snap.lastFix;
+    const age = f ? Date.now() - f.timestamp : Infinity;
+    if (this.snap.nextManeuver && (age > 5000 || age < -5000 || this.progress.status !== 'active')) this.update({ nextManeuver: null });
+  }
+
   async startOrResume() {
-    const type: SessionEventType = this.progress.status === 'paused' ? 'resumed' : 'start_confirmed';
+    const resuming = this.progress.status === 'paused';
+    const type: SessionEventType = resuming ? 'resumed' : 'start_confirmed';
     await this.persist([{ type, payload: {} }], { status: 'active' });
+    if (resuming) {
+      // Replan from the reacquired real position on the first reliable committed fix.
+      this.guidance = null;
+      this.update({ plan: null, nextManeuver: null, cursor: 0, notice: 'none' });
+    }
     this.matcher = initialMatcherState();
     this.gps.start();
     void this.wake.acquire();
@@ -152,6 +205,7 @@ export class DriveController {
   }
 
   dispose() {
+    clearInterval(this.timer);
     this.gps.stop();
     void this.wake.release();
     document.removeEventListener('visibilitychange', this.onVisibility);
@@ -201,14 +255,16 @@ export class DriveController {
     }
     const g = updateGuidance(this.gi, plan, this.guidance, matched, reliable);
     this.guidance = g.state;
-    let notice: DriveSnapshot['notice'] = this.snap.notice === 'outside_policy' || this.snap.notice === 'storage_error' ? this.snap.notice : 'none';
+    const keep: DriveSnapshot['notice'][] = ['outside_policy', 'storage_error', 'outside_needs_approval', 'plan_failed'];
+    let notice: DriveSnapshot['notice'] = keep.includes(this.snap.notice) ? this.snap.notice : 'none';
     if (g.event === 'deviation' && matched) {
       notice = 'off_route';
       this.maybeReplan(matched, 'deviation');
     } else if (g.event === 'finished') notice = 'finished';
-    else if (g.event === 'on_route' && notice === 'outside_policy') notice = 'none';
+    else if (g.event === 'on_route' && (notice === 'outside_policy' || notice === 'plan_failed')) notice = 'none';
     const fixAge = this.snap.lastFix ? Date.now() - this.snap.lastFix.timestamp : Infinity;
-    const showManeuver = reliable && this.planValid && fixAge < 5000 && matched !== null && g.event !== 'off_route_pending';
+    const showManeuver = reliable && this.planValid && fixAge < 5000 && fixAge > -5000 && matched !== null && this.progress.status === 'active'
+      && g.event !== 'off_route_pending' && g.event !== 'deviation' && notice !== 'plan_failed' && notice !== 'outside_needs_approval';
     let nextManeuver: DriveSnapshot['nextManeuver'] = null;
     if (showManeuver && matched) {
       const cursor = g.state.cursor;
@@ -228,6 +284,7 @@ export class DriveController {
     const blocked = new Set<number>();
     const excl = activeExclusionIds(this.progress);
     for (const r of this.header.requirements) if (excl.has(r.requirementId)) blocked.add(this.gi.idx.get(r.edgeId)!);
+    blocked.delete(mi); // the vehicle can still leave along its current edge
     if (!edgeTraversable(this.gi, this.zoneInfo, this.header.boundaryPolicy, blocked, mi)) {
       this.update({ notice: 'outside_policy', nextManeuver: null });
       return;
@@ -265,6 +322,12 @@ export class DriveController {
           this.update({ notice: 'plan_failed' });
           return;
         }
+        if (r.plan.totals.outsideMeters > this.approvedOutsideMeters + 2) {
+          // Never adopt more outside travel than the user approved without asking again.
+          this.pendingPlan = r.plan;
+          this.update({ notice: 'outside_needs_approval', nextManeuver: null, pendingOutsidePlan: { outsideMeters: r.plan.totals.outsideMeters, approvedMeters: this.approvedOutsideMeters } });
+          return;
+        }
         await this.persist([{ type: 'plan_accepted', payload: { plan: r.plan, reason: why } }]);
         this.adoptPlan(r.plan, r.validation.ok);
         this.recompute();
@@ -280,7 +343,18 @@ export class DriveController {
     this.maneuvers = buildManeuvers(this.gi, plan);
     this.stepDist = stepStartDistances(plan);
     this.guidance = initialGuidance(plan);
-    this.update({ plan, planValid: valid, cursor: 0, notice: 'none' });
+    this.update({ plan, planValid: valid, cursor: 0, notice: 'none', pendingOutsidePlan: null });
+  }
+
+  async approvePendingOutside() {
+    const plan = this.pendingPlan;
+    if (!plan) return;
+    this.pendingPlan = null;
+    this.approvedOutsideMeters = plan.totals.outsideMeters;
+    await this.persist([{ type: 'plan_accepted', payload: { plan, reason: 'outside_approved', approvedOutsideMeters: plan.totals.outsideMeters } }]);
+    this.adoptPlan(plan, true);
+    this.update({ pendingOutsidePlan: null });
+    this.recompute();
   }
 
   /** Mark the physical road under the current matched position blocked (both directions). */
