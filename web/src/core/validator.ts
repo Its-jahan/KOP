@@ -3,7 +3,7 @@
 
 import type { GraphIndex, Prefix } from './graph';
 import { haversine } from './geo';
-import { addInterval, coveredWithin, type Interval } from './intervals';
+import { addInterval, coveredWithin, unionIntervals, type Interval } from './intervals';
 import { STRICT_OUTSIDE_TOL_M, requirementCovered, type EdgeZoneInfo } from './requirements';
 import type { BoundaryPolicy, RequiredInterval, RoutePlan } from './types';
 
@@ -93,7 +93,7 @@ export function validatePlan(
     }
     if (ctx.excluded.has(id)) errors.push(`claimed_excluded_requirement:${id}`);
     const u = [...(ctx.observed.get(r.edgeId) ?? []), ...(planned.get(r.edgeId) ?? [])];
-    if (!requirementCovered(u.sort((x, y) => x[0] - y[0]), r)) errors.push(`claimed_but_not_traversed:${id}`);
+    if (!requirementCovered(unionIntervals(u), r)) errors.push(`claimed_but_not_traversed:${id}`);
   }
   const claimed = new Set(plan.coveredRequirementIds);
   const unreach = new Set(plan.unreachable.map((u) => u.requirementId));

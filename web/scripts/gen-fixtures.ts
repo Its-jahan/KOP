@@ -319,6 +319,27 @@ const seg = (w: number, a: number, b: number, d: 'f' | 'b') => `osm:w${w}:n${a}-
   ]);
 }
 
+// F21 irreversible exit: prefer the downstream block that keeps the most work reachable
+{
+  const osm = new Osm()
+    .node(1, 0, 0).node(2, 100, 0)
+    .node(3, 130, 30).node(4, 180, 30)
+    .node(5, 200, -60).node(6, 300, -60).node(7, 400, -60)
+    .way(601, [1, 2], RES)
+    .way(602, [2, 3], { ...RES, oneway: 'yes' }).way(603, [3, 4], RES)
+    .way(604, [2, 5], { ...RES, oneway: 'yes' }).way(605, [5, 6], RES).way(606, [6, 7], RES)
+    .json();
+  await emit('F21_irreversible_exit_choice', 'Irreversible exit choice between one-way branches', 'The nearer branch is a small sink; the planner must enter the branch whose downstream chain holds more remaining work.', {
+    osm, zone: { type: 'polygon', coordinates: rect(-50, -120, 450, 80) }, policies: ['STRICT_INSIDE'],
+    start: { edgeId: seg(601, 1, 2, 'b'), offsetMeters: 0 },
+  }, [
+    { kind: 'plan_status', policy: 'STRICT_INSIDE', status: 'partial' },
+    { kind: 'plan_valid', policy: 'STRICT_INSIDE' },
+    { kind: 'unreachable_cause', policy: 'STRICT_INSIDE', requirementId: `${seg(603, 3, 4, 'f')}#0`, cause: 'not_reachable_from_start' },
+    { kind: 'plan_never_uses_edge_prefix', policy: 'STRICT_INSIDE', prefix: 'osm:w602:' },
+  ]);
+}
+
 // F12 stale planning response
 emitTable('F12_stale_plan_response', 'Stale planning response', 'A slow older result never replaces a newer plan.', 'decidePlan',
   [

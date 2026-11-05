@@ -74,7 +74,12 @@ Deterministic greedy nearest-feasible requirement with legal shortest-path conne
 (`legalShortestPath`: Dijkstra over states, integer mm costs, ties by cost → edgeId → automaton
 key; equal-cost relaxations keep the first parent). Traversable edges: eligible, not user-blocked,
 and (STRICT_INSIDE) outside length <= 2 m. Edge-level SCCs are computed; while the current SCC
-still has remaining requirements only targets in that SCC are accepted (fallback: any). Each
+still has remaining requirements only targets in that SCC are accepted. When it has none (leaving
+is irreversible), `sccChainValues` scores every SCC as remaining requirement edges in it + the best
+score among SCCs directly reachable from it (condensation DAG, sinks first); the target is the
+nearest remaining edge whose SCC has the best score among those reachable from the current edge
+(edge-level BFS). Fallback in every case: nearest remaining edge. Planned coverage merges observed
+and planned intervals with `unionIntervals` before measuring (no double counting). Each
 traversed edge marks all requirements it completes (incidental coverage counts). Start: the start
 edge from the start offset to its end. Optional return-to-start. Unplanned requirements are listed
 with causes; status `partial` when anything is `not_reachable_from_start` or the budget is hit,

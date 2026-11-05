@@ -1,0 +1,340 @@
+{
+ "fixtureId": "F21_irreversible_exit_choice",
+ "title": "Irreversible exit choice between one-way branches",
+ "description": "The nearer branch is a small sink; the planner must enter the branch whose downstream chain holds more remaining work.",
+ "contractVersion": "1.0.0",
+ "kind": "graph",
+ "input": {
+  "osm": {
+   "osm3s": {
+    "timestamp_osm_base": "fixture"
+   },
+   "elements": [
+    {
+     "type": "node",
+     "id": 1,
+     "lat": 40.18,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 2,
+     "lat": 40.18,
+     "lon": 44.5011758
+    },
+    {
+     "type": "node",
+     "id": 3,
+     "lat": 40.1802713,
+     "lon": 44.5015285
+    },
+    {
+     "type": "node",
+     "id": 4,
+     "lat": 40.1802713,
+     "lon": 44.5021164
+    },
+    {
+     "type": "node",
+     "id": 5,
+     "lat": 40.1794574,
+     "lon": 44.5023515
+    },
+    {
+     "type": "node",
+     "id": 6,
+     "lat": 40.1794574,
+     "lon": 44.5035273
+    },
+    {
+     "type": "node",
+     "id": 7,
+     "lat": 40.1794574,
+     "lon": 44.5047031
+    },
+    {
+     "type": "way",
+     "id": 601,
+     "nodes": [
+      1,
+      2
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    },
+    {
+     "type": "way",
+     "id": 602,
+     "nodes": [
+      2,
+      3
+     ],
+     "tags": {
+      "highway": "residential",
+      "oneway": "yes"
+     }
+    },
+    {
+     "type": "way",
+     "id": 603,
+     "nodes": [
+      3,
+      4
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    },
+    {
+     "type": "way",
+     "id": 604,
+     "nodes": [
+      2,
+      5
+     ],
+     "tags": {
+      "highway": "residential",
+      "oneway": "yes"
+     }
+    },
+    {
+     "type": "way",
+     "id": 605,
+     "nodes": [
+      5,
+      6
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    },
+    {
+     "type": "way",
+     "id": 606,
+     "nodes": [
+      6,
+      7
+     ],
+     "tags": {
+      "highway": "residential"
+     }
+    }
+   ]
+  },
+  "zone": {
+   "type": "polygon",
+   "coordinates": [
+    [
+     44.4994121,
+     40.1789148
+    ],
+    [
+     44.505291,
+     40.1789148
+    ],
+    [
+     44.505291,
+     40.1807235
+    ],
+    [
+     44.4994121,
+     40.1807235
+    ]
+   ]
+  },
+  "policies": [
+   "STRICT_INSIDE"
+  ],
+  "start": {
+   "edgeId": "osm:w601:n1-n2:b",
+   "offsetMeters": 0
+  }
+ },
+ "expected": {
+  "graph": {
+   "contentHash": "469bd246ba10e2fd9377985a94d5d899c2b5af8ff52bc49ba4e9320a147a4bac",
+   "graphId": "g-469bd246ba10e2fd",
+   "nodeCount": 7,
+   "edgeCount": 10,
+   "restrictionCount": 0,
+   "edgeIds": [
+    "osm:w601:n1-n2:b",
+    "osm:w601:n1-n2:f",
+    "osm:w602:n2-n3:f",
+    "osm:w603:n3-n4:b",
+    "osm:w603:n3-n4:f",
+    "osm:w604:n2-n5:f",
+    "osm:w605:n5-n6:b",
+    "osm:w605:n5-n6:f",
+    "osm:w606:n6-n7:b",
+    "osm:w606:n6-n7:f"
+   ],
+   "eligibility": {
+    "osm:w601:n1-n2:b": "eligible",
+    "osm:w601:n1-n2:f": "eligible",
+    "osm:w602:n2-n3:f": "eligible",
+    "osm:w603:n3-n4:b": "eligible",
+    "osm:w603:n3-n4:f": "eligible",
+    "osm:w604:n2-n5:f": "eligible",
+    "osm:w605:n5-n6:b": "eligible",
+    "osm:w605:n5-n6:f": "eligible",
+    "osm:w606:n6-n7:b": "eligible",
+    "osm:w606:n6-n7:f": "eligible"
+   },
+   "eligibilityReason": {},
+   "nodePassage": {},
+   "restrictions": []
+  },
+  "requirements": [
+   {
+    "requirementId": "osm:w601:n1-n2:b#0",
+    "edgeId": "osm:w601:n1-n2:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w601:n1-n2:f#0",
+    "edgeId": "osm:w601:n1-n2:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w602:n2-n3:f#0",
+    "edgeId": "osm:w602:n2-n3:f",
+    "start": 0,
+    "end": 42.52,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w603:n3-n4:b#0",
+    "edgeId": "osm:w603:n3-n4:b",
+    "start": 0,
+    "end": 49.95,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w603:n3-n4:f#0",
+    "edgeId": "osm:w603:n3-n4:f",
+    "start": 0,
+    "end": 49.95,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w604:n2-n5:f#0",
+    "edgeId": "osm:w604:n2-n5:f",
+    "start": 0,
+    "end": 116.69,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w605:n5-n6:b#0",
+    "edgeId": "osm:w605:n5-n6:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w605:n5-n6:f#0",
+    "edgeId": "osm:w605:n5-n6:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w606:n6-n7:b#0",
+    "edgeId": "osm:w606:n6-n7:b",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w606:n6-n7:f#0",
+    "edgeId": "osm:w606:n6-n7:f",
+    "start": 0,
+    "end": 99.89,
+    "status": "unvisited"
+   }
+  ],
+  "plans": {
+   "STRICT_INSIDE": {
+    "status": "partial",
+    "edgeSequence": [
+     "osm:w601:n1-n2:b",
+     "osm:w601:n1-n2:f",
+     "osm:w604:n2-n5:f",
+     "osm:w605:n5-n6:f",
+     "osm:w606:n6-n7:f",
+     "osm:w606:n6-n7:b",
+     "osm:w605:n5-n6:b"
+    ],
+    "stepKinds": [
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required",
+     "required"
+    ],
+    "turnarounds": [
+     "1:unverified",
+     "5:unverified"
+    ],
+    "coveredRequirementIds": [
+     "osm:w601:n1-n2:b#0",
+     "osm:w601:n1-n2:f#0",
+     "osm:w604:n2-n5:f#0",
+     "osm:w605:n5-n6:b#0",
+     "osm:w605:n5-n6:f#0",
+     "osm:w606:n6-n7:b#0",
+     "osm:w606:n6-n7:f#0"
+    ],
+    "unreachable": [
+     "osm:w602:n2-n3:f#0:not_reachable_from_start",
+     "osm:w603:n3-n4:b#0:not_reachable_from_start",
+     "osm:w603:n3-n4:f#0:not_reachable_from_start"
+    ],
+    "totals": {
+     "totalMeters": 716,
+     "newCoverageMeters": 716,
+     "repeatMeters": 0,
+     "outsideMeters": 0,
+     "approachMeters": 0
+    },
+    "valid": true,
+    "validationErrors": []
+   }
+  },
+  "paths": {},
+  "tracks": {}
+ },
+ "assertions": [
+  {
+   "kind": "plan_status",
+   "policy": "STRICT_INSIDE",
+   "status": "partial"
+  },
+  {
+   "kind": "plan_valid",
+   "policy": "STRICT_INSIDE"
+  },
+  {
+   "kind": "unreachable_cause",
+   "policy": "STRICT_INSIDE",
+   "requirementId": "osm:w603:n3-n4:f#0",
+   "cause": "not_reachable_from_start"
+  },
+  {
+   "kind": "plan_never_uses_edge_prefix",
+   "policy": "STRICT_INSIDE",
+   "prefix": "osm:w602:"
+  }
+ ],
+ "tolerances": {
+  "offsetMeters": 0.5,
+  "totalsMeters": 1
+ }
+}

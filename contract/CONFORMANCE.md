@@ -1,6 +1,6 @@
 # Conformance (contract 1.0.0)
 
-Fixture set revision 2 (after independent review): F01–F20 (F19 only_* through junction, F20 gap at a corner; new tracks in F01, F08, F10; new invalid cases in F17). Normaliser `osm-normalizer-1.1.0`, matcher `seq-matcher-1.1.0`.
+Fixture set revision 3: F01–F21 (r2 after independent review added F19 only_* through junction, F20 gap at a corner, new tracks in F01/F08/F10, new invalid cases in F17; r3 added F21 irreversible exit choice). Normaliser `osm-normalizer-1.1.0`, matcher `seq-matcher-1.1.0`, planner `1.1.0`. The data schema is unchanged (`schemaVersion` 1.0.0); behaviour revisions are identified by these component versions.
 
 Each `fixtures/*.json` has a `kind`:
 

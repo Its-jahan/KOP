@@ -6,7 +6,7 @@
 
 import type { GraphIndex, Prefix, Transition } from './graph';
 import { MinHeap } from './heap';
-import { addInterval, coveredWithin, type Interval } from './intervals';
+import { addInterval, coveredWithin, unionIntervals, type Interval } from './intervals';
 import {
   COVERAGE_TOLERANCE_M,
   STRICT_OUTSIDE_TOL_M,
@@ -180,6 +180,33 @@ export function legalShortestPath(
   return { path: null, endPrefix: null, cost: Infinity, settled };
 }
 
+/**
+ * For each SCC c: value[c] = remaining requirement edges in c + max value over SCCs directly
+ * reachable from c (condensation DAG). Tarjan numbers SCCs in reverse topological order,
+ * so ascending ids are processed sinks-first.
+ */
+export function sccChainValues(gi: GraphIndex, comp: Int32Array, allow: (i: number) => boolean, remaining: Map<number, unknown>): Int32Array {
+  let n = 0;
+  for (const c of comp) if (c + 1 > n) n = c + 1;
+  const w = new Int32Array(n);
+  for (const e of remaining.keys()) if (comp[e] >= 0) w[comp[e]]++;
+  const succ: number[][] = Array.from({ length: n }, () => []);
+  comp.forEach((c, i) => {
+    if (c < 0) return;
+    for (const t of gi.successors([i], allow)) {
+      const d = comp[t.next];
+      if (d >= 0 && d !== c) succ[c].push(d);
+    }
+  });
+  const value = new Int32Array(n);
+  for (let c = 0; c < n; c++) {
+    let m = 0;
+    for (const d of succ[c]) if (value[d] > m) m = value[d];
+    value[c] = w[c] + m;
+  }
+  return value;
+}
+
 export function planCoverage(inp: PlannerInput): RoutePlan {
   const { gi, zoneInfo } = inp;
   const now = inp.now ?? (() => Date.now());
@@ -206,7 +233,7 @@ export function planCoverage(inp: PlannerInput): RoutePlan {
     const id = gi.edges[i].edgeId;
     const obs = inp.observed.get(id) ?? [];
     const pl = planned.get(i) ?? [];
-    return pl.length ? [...obs, ...pl].sort((a, b) => a[0] - b[0]) : obs;
+    return pl.length ? unionIntervals([...obs, ...pl]) : obs;
   };
 
   let plannable = 0;
@@ -321,8 +348,25 @@ export function planCoverage(inp: PlannerInput): RoutePlan {
     }
     const curEdge = prefix[prefix.length - 1];
     const sameComp = comp[curEdge] >= 0 && remainingInComp(comp[curEdge]);
-    let res = dijkstra(prefix, (e) => remainingByEdge.has(e) && (!sameComp || comp[e] === comp[curEdge]));
-    if (!res && sameComp) res = dijkstra(prefix, (e) => remainingByEdge.has(e));
+    let res: ReturnType<typeof dijkstra> = null;
+    if (sameComp) {
+      res = dijkstra(prefix, (e) => remainingByEdge.has(e) && comp[e] === comp[curEdge]);
+    } else {
+      // Leaving a strongly connected block is irreversible: enter the reachable block whose
+      // downstream chain still holds the most remaining work (ties: nearest).
+      const value = sccChainValues(gi, comp, allow, remainingByEdge);
+      let best = -1;
+      const seen = new Uint8Array(gi.edges.length);
+      const queue = [curEdge];
+      seen[curEdge] = 1;
+      while (queue.length) {
+        const v = queue.pop()!;
+        if (remainingByEdge.has(v) && v !== curEdge && value[comp[v]] > best) best = value[comp[v]];
+        for (const t of gi.successors([v], allow)) if (!seen[t.next]) { seen[t.next] = 1; queue.push(t.next); }
+      }
+      if (best > 0) res = dijkstra(prefix, (e) => remainingByEdge.has(e) && value[comp[e]] === best);
+    }
+    if (!res) res = dijkstra(prefix, (e) => remainingByEdge.has(e));
     if (!res) break;
     for (const { edge, t } of res.path) {
       takeEdge(edge, 0, gi.length(edge), t.uturn ? t.turnaround : null);

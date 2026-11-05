@@ -1,8 +1,9 @@
-# Coverage Navigator Shared Contract — v1.0.0 (FROZEN)
+# Coverage Navigator Shared Contract — schema v1.0.0, fixture revision 3
 
 This package is the single interchange contract for the web (Vercel) and Android
-implementations. The second implementation MUST adopt it unchanged. Any change is a
-new contract version.
+implementations. The second implementation MUST adopt it unchanged. The data schema
+(1.0.0) is frozen; algorithm fixes after the independent review are tracked as fixture
+revisions plus component versions (normaliser/matcher/planner, see CONFORMANCE.md).
 
 | Path | Purpose |
 |---|---|
@@ -10,7 +11,7 @@ new contract version.
 | `CANONICALIZATION.md` | Graph content-hash rule (RFC 8785 subset + SHA-256) |
 | `ALGORITHMS.md` | Normative behaviour (normaliser, zone clipping, planner, matcher, guidance) |
 | `CONFORMANCE.md` | How to run fixtures and compare outputs |
-| `fixtures/F01..F20*.json` | 20 golden fixtures, revision 2 (inputs + expected outputs + semantic assertions) |
+| `fixtures/F01..F21*.json` | 21 golden fixtures, revision 3 (inputs + expected outputs + semantic assertions) |
 | `vectors/jcs-vectors.json` | Canonical JSON / SHA-256 vectors (incl. Armenian, Persian, escapes, surrogate pairs) |
 
 Reference implementation: `web/src/core/*.ts` (pure TypeScript, no DOM). Where the
