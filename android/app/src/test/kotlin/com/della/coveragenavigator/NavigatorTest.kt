@@ -16,6 +16,7 @@ import della.core.planCoverage
 import della.core.stepStartDistances
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.cos
@@ -98,5 +99,55 @@ class NavigatorTest {
         val n = Navigator()
         assertEquals(null, n.compute(gi, plan, mans, starts, fix(50.0, 0.0, 90.0, 10.0), 20_000, 0))
         assertEquals(null, n.compute(gi, plan, mans, starts, fix(50.0, 0.0, 90.0, 10.0, acc = 120.0), 500, 0))
+    }
+
+    // ---- lane guidance ----
+
+    @Test
+    fun laneHintsRightTurnMarksOnlyRightLanes() {
+        val h = laneHints(listOf(listOf("left"), listOf("through"), listOf("through", "right")), "right")!!
+        assertEquals(listOf(false, false, true), h.map { it.ok })
+    }
+
+    @Test
+    fun laneHintsLeftTurnAndStraightOn() {
+        assertEquals(listOf(true, true, false), laneHints(listOf(listOf("left"), listOf("left", "through"), listOf("through", "right")), "left")!!.map { it.ok })
+        assertEquals(listOf(false, true, false), laneHints(listOf(listOf("left"), listOf("through"), listOf("right")), "continue")!!.map { it.ok })
+    }
+
+    @Test
+    fun laneHintsNoAdviceWhenAllWorkNothingMatchesOrUnmapped() {
+        assertNull(laneHints(listOf(listOf("through", "right"), listOf("through", "right")), "right"))
+        assertNull(laneHints(listOf(listOf("left"), listOf("through")), "right"))
+        assertNull(laneHints(null, "right"))
+    }
+
+    @Test
+    fun navigatorAttachesLanesFromApproachingRoad() {
+        // Approach road A(0,0)->B(150,0) has lanes; at B the route turns right (south) to C(150,-100).
+        val pts = listOf(1 to (0.0 to 0.0), 2 to (150.0 to 0.0), 3 to (150.0 to -100.0), 4 to (300.0 to 0.0))
+        val osm2 = """
+            {"osm3s":{"timestamp_osm_base":"t"},"elements":[
+            ${pts.joinToString(",") { (id, xy) -> val p = ll(xy.first, xy.second); "{\"type\":\"node\",\"id\":$id,\"lat\":${p.lat},\"lon\":${p.lon}}" }},
+            {"type":"way","id":1,"nodes":[1,2],"tags":{"highway":"secondary","oneway":"yes","turn:lanes":"left|through|through;right"}},
+            {"type":"way","id":2,"nodes":[2,3],"tags":{"highway":"secondary","oneway":"yes"}},
+            {"type":"way","id":3,"nodes":[2,4],"tags":{"highway":"secondary","oneway":"yes"}}
+            ]}
+        """.trimIndent()
+        val g2 = normalizeOverpass(OverpassResponse.parse(osm2), NormalizeOptions(fetchedAt = "x", providerId = "fixture"))
+        val gi2 = GraphIndex(g2)
+        val z2 = ZoneDefinition.Polygon(listOf(ll(-30.0, 30.0), ll(170.0, 30.0), ll(170.0, -130.0), ll(-30.0, -130.0)))
+        val r2 = computeRequirements(gi2, z2)
+        val p2 = planCoverage(
+            PlannerInput(
+                gi2, r2.zoneInfo, r2.requirements, emptyMap(), emptySet(), "STRICT_INSIDE",
+                StartState("osm:w1:n1-n2:f", 0.0, "selected_start"),
+                meta = PlanMeta("p2", g2.contentHash, 1, 0, 1, "x"),
+            ),
+        )
+        assertEquals(listOf("osm:w1:n1-n2:f", "osm:w2:n2-n3:f"), p2.steps.map { it.edgeId })
+        val n = Navigator().compute(gi2, p2, buildManeuvers(gi2, p2), stepStartDistances(p2), fix(80.0, 1.0, 90.0, 10.0), 500, 0)!!
+        assertEquals("right", n.type)
+        assertEquals(listOf(false, false, true), n.lanes!!.map { it.ok })
     }
 }

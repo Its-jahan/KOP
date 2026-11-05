@@ -170,8 +170,9 @@ class Engine(private val appContext: Context, private val store: Store) {
 
     private var prepared: Prepared? = null
     private var previewPlan: RoutePlan? = null
-    private var connectorPlan: RoutePlan? = null
     private var policy = BoundaryPolicy.STRICT_INSIDE
+    private var returnToStart = false
+    private var outsideApproved = false
     private var snapped: SnappedStart? = null
     private var fetchJob: Job? = null
     private var planJob: Job? = null
@@ -336,12 +337,12 @@ class Engine(private val appContext: Context, private val store: Store) {
         planJob?.cancel()
         prepared = null
         previewPlan = null
-        connectorPlan = null
         snapped = null
         policy = BoundaryPolicy.STRICT_INSIDE
+        outsideApproved = false
         _ui.update {
             it.copy(
-                graph = GraphInfo(), counts = RequirementCounts(), start = StartInfo(), plan = PlanInfo(), connectorOffer = null,
+                graph = GraphInfo(), counts = RequirementCounts(), start = StartInfo(), plan = PlanInfo(), outsideApproved = false,
                 layers = it.layers.copy(coverage = GeoJson.EMPTY, visited = GeoJson.EMPTY, plan = GeoJson.EMPTY, markers = GeoJson.EMPTY),
             )
         }
@@ -428,15 +429,19 @@ class Engine(private val appContext: Context, private val store: Store) {
 
     private fun allowFor(p: Prepared, pol: String): (Int) -> Boolean = { i -> edgeTraversable(p.gi, p.req.zoneInfo, pol, emptySet(), i) }
 
-    fun setStartPoint(pt: LonLat, source: String) = post {
+    fun setStartPoint(pt: LonLat, source: String) = post { snapStartAt(pt, source, keepConfirmed = false) }
+
+    private suspend fun snapStartAt(pt: LonLat, source: String, keepConfirmed: Boolean) {
         val p = prepared
-        if (active != null) return@post
+        if (active != null) return
         if (p == null) {
             _ui.update { it.copy(start = StartInfo(requested = pt, error = "no_graph", source = source)) }
-            return@post
+            return
         }
+        val before = _ui.value.start
         previewPlan = null
-        connectorPlan = null
+        outsideApproved = false
+        _ui.update { it.copy(outsideApproved = false) }
         val allow = allowFor(p, policy)
         val comp = withContext(Dispatchers.Default) { edgeScc(p.gi, allow) }
         val main = mainComponentPredicate(p.gi, comp)
@@ -449,6 +454,8 @@ class Engine(private val appContext: Context, private val store: Store) {
             }
         } else {
             setSnapped(p, pt, r.edgeId, r.offsetMeters, r.position, r.distanceMeters, main, source)
+            // A policy change that keeps the same road keeps the user's confirmation.
+            if (keepConfirmed && before.confirmed && before.snappedEdgeId == r.edgeId) _ui.update { it.copy(start = it.start.copy(confirmed = true)) }
         }
         refreshStartBlockers()
     }
@@ -491,49 +498,56 @@ class Engine(private val appContext: Context, private val store: Store) {
         refreshStartBlockers()
     }
 
-    fun setStrictPolicy() = post {
-        if (active != null || policy == BoundaryPolicy.STRICT_INSIDE) {
-            _ui.update { it.copy(connectorOffer = null) }
-            return@post
-        }
-        policy = BoundaryPolicy.STRICT_INSIDE
+    /** Boundary policy (segmented control). Outside travel needs an explicit approval before driving. */
+    fun setPolicy(pol: String) = post {
+        if (active != null || policy == pol) return@post
+        policy = pol
         previewPlan = null
-        connectorPlan = null
-        _ui.update { it.copy(plan = PlanInfo(policy = policy), connectorOffer = null, layers = it.layers.copy(plan = GeoJson.EMPTY)) }
+        outsideApproved = false
+        _ui.update { it.copy(plan = PlanInfo(policy = policy), outsideApproved = false, layers = it.layers.copy(plan = GeoJson.EMPTY)) }
         resnapForPolicy()
     }
 
-    /** Computes the connector plan and asks for explicit confirmation showing outside meters. */
-    fun requestConnectors() = post {
-        val p = prepared ?: return@post
-        val s = snapped ?: run { toast(R.string.msg_need_start); return@post }
-        _ui.update { it.copy(busy = true) }
-        val plan = withContext(Dispatchers.Default) { computePlan(p, s, BoundaryPolicy.ALLOW_NECESSARY_CONNECTORS) }
-        connectorPlan = plan
-        _ui.update {
-            it.copy(busy = false, connectorOffer = ConnectorOffer(plan.totals.outsideMeters, plan.totals.totalMeters, plan.coveredRequirementIds.size, plan.status))
-        }
+    fun setReturnToStart(on: Boolean) = post {
+        if (active != null || returnToStart == on) return@post
+        returnToStart = on
+        previewPlan = null
+        outsideApproved = false
+        _ui.update { it.copy(returnToStart = on, plan = PlanInfo(policy = policy), outsideApproved = false, layers = it.layers.copy(plan = GeoJson.EMPTY)) }
+        refreshStartBlockers()
     }
 
-    fun confirmConnectors() = post {
-        val plan = connectorPlan ?: return@post
-        policy = BoundaryPolicy.ALLOW_NECESSARY_CONNECTORS
-        _ui.update { it.copy(connectorOffer = null) }
-        acceptPreview(plan, 0)
+    fun setOutsideApproved(on: Boolean) = post {
+        outsideApproved = on
+        _ui.update { it.copy(outsideApproved = on) }
+        refreshStartBlockers()
     }
 
-    fun dismissConnectors() = post { _ui.update { it.copy(connectorOffer = null) } }
+    /** "Edit area": drop the loaded road network and go back to drawing (the zone itself is kept). */
+    fun editArea() = post {
+        if (active != null) return@post
+        invalidateGraph()
+        _ui.update { it.copy(tapMode = TapMode.ZONE) }
+    }
+
+    fun cancelPlan() = post {
+        planJob?.cancel()
+        _ui.update { it.copy(plan = it.plan.copy(computing = false)) }
+        refreshStartBlockers()
+    }
+
+    fun recheckRecovery() = post { checkRecovery() }
 
     private suspend fun resnapForPolicy() {
         val r = _ui.value.start.requested ?: return
         val src = _ui.value.start.source
-        setStartPoint(r, src)
+        snapStartAt(r, src, keepConfirmed = true)
     }
 
     private fun computePlan(p: Prepared, s: SnappedStart, pol: String, shouldCancel: (() -> Boolean)? = null): RoutePlan = planCoverage(
         PlannerInput(
             gi = p.gi, zoneInfo = p.req.zoneInfo, requirements = p.req.requirements, observed = emptyMap(), excluded = emptySet(),
-            policy = pol, start = StartState(s.edgeId, s.offsetMeters, "selected_start"),
+            policy = pol, start = StartState(s.edgeId, s.offsetMeters, "selected_start"), returnToStart = returnToStart,
             timeBudgetMs = 20_000, shouldCancel = shouldCancel,
             meta = PlanMeta("preview-" + UUID.randomUUID().toString().take(8), p.graph.contentHash, 1, 0, 1, isoNow()),
         ),
@@ -543,7 +557,10 @@ class Engine(private val appContext: Context, private val store: Store) {
         val p = prepared ?: run { toast(R.string.msg_need_graph); return@post }
         val s = snapped ?: run { toast(R.string.msg_need_start); return@post }
         planJob?.cancel()
-        _ui.update { it.copy(plan = it.plan.copy(computing = true, policy = policy)) }
+        previewPlan = null
+        outsideApproved = false
+        _ui.update { it.copy(plan = it.plan.copy(computing = true, policy = policy), outsideApproved = false) }
+        refreshStartBlockers()
         planJob = scope.launch {
             val t0 = SystemClock.elapsedRealtime()
             val plan = withContext(Dispatchers.Default) {
@@ -586,8 +603,12 @@ class Engine(private val appContext: Context, private val store: Store) {
         if (snapped == null) b.add(R.string.blocker_no_start)
         else if (!s.start.confirmed) b.add(R.string.blocker_start_unconfirmed)
         val pv = previewPlan
+        if (s.plan.computing) b.add(R.string.blocker_planning)
         if (pv == null) b.add(R.string.blocker_no_plan)
-        else if (pv.steps.isEmpty() || pv.status == "failed" || pv.status == "no_requirements") b.add(R.string.blocker_plan_empty)
+        else {
+            if (pv.steps.isEmpty() || pv.status == "failed" || pv.status == "no_requirements") b.add(R.string.blocker_plan_empty)
+            if (pv.totals.outsideMeters > 2.0 && !outsideApproved) b.add(R.string.blocker_outside_unapproved)
+        }
         _ui.update { it.copy(startBlockers = b) }
     }
 
@@ -605,7 +626,7 @@ class Engine(private val appContext: Context, private val store: Store) {
         val zone = Zone("z-" + UUID.randomUUID().toString().take(8), 1, p.zone)
         val base = SessionBase(
             sessionId = sessionId, graphId = p.graph.graphId, contentHash = p.graph.contentHash, zone = zone,
-            vehicleProfile = "passenger_car", boundaryPolicy = policy, returnToStart = false,
+            vehicleProfile = "passenger_car", boundaryPolicy = policy, returnToStart = returnToStart,
             startSelection = StartSelection(_ui.value.start.requested ?: s.position, s, true), createdAt = isoNow(),
         )
         val now = System.currentTimeMillis()

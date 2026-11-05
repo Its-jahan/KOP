@@ -46,11 +46,57 @@ data class NavInstruction(
     val ahead: List<List<LonLat>> = emptyList(),
     /** Stable key of the upcoming maneuver (for voice de-duplication) */
     val key: String = "",
+    /** Lane guidance for the next maneuver (left to right), when lanes are mapped. */
+    val lanes: List<LaneHint>? = null,
 )
+
+data class LaneHint(
+    val turns: List<String>,
+    /** This lane can be used for the next maneuver. */
+    val ok: Boolean,
+)
+
+private val RIGHT = listOf("right", "slight_right", "sharp_right")
+private val LEFT = listOf("left", "slight_left", "sharp_left")
+
+/**
+ * Which lanes serve a maneuver. Exact family first (slight_right: slight_right/right), then a
+ * conservative fallback for slight turns (through). Unknown match -> null (never guess).
+ */
+fun laneHints(lanes: List<List<String>>?, maneuver: String): List<LaneHint>? {
+    if (lanes == null || lanes.size < 2) return null
+    val wanted: List<List<String>> = when (maneuver) {
+        "continue" -> listOf(listOf("through", "none"))
+        "right", "sharp_right" -> listOf(RIGHT)
+        "slight_right" -> listOf(listOf("slight_right", "right"), listOf("through"))
+        "left", "sharp_left" -> listOf(LEFT)
+        "slight_left" -> listOf(listOf("slight_left", "left"), listOf("through"))
+        "turnaround" -> listOf(listOf("reverse"))
+        else -> return null
+    }
+    for (w in wanted) {
+        val hints = lanes.map { t -> LaneHint(t, t.any { it in w }) }
+        if (hints.any { it.ok } && hints.any { !it.ok }) return hints
+        if (hints.all { it.ok }) return null // every lane works: nothing to advise
+    }
+    return null
+}
+
+/** Lanes of the road approaching a junction: the incoming edge, or the one before a short link. */
+private fun approachLanes(gi: GraphIndex, incoming: List<Int>): List<List<String>>? {
+    var walked = 0.0
+    for (e in incoming) {
+        val l = gi.edges[e].turnLanes
+        if (l != null) return l
+        walked += gi.length(e)
+        if (walked > 60) break
+    }
+    return null
+}
 
 private class Seg(val edge: Int, val from: Double, val to: Double, val turnaround: String?)
 
-private data class GuideMan(val type: String, val road: String?, val at: Double, val verified: Boolean?, val key: String)
+private data class GuideMan(val type: String, val road: String?, val at: Double, val verified: Boolean?, val key: String, val segIndex: Int)
 
 class Navigator {
     /** Furthest plan step reached by guidance (only moves forward, within a window). */
@@ -129,11 +175,14 @@ class Navigator {
             return if (m == null) {
                 NavInstruction("route", "continue", edgeName(gi, gi.idx[plan.steps[bestK].edgeId]!!), 0.0, approximate = approximate, ahead = ahead, key = "${plan.planId}:end")
             } else {
+                val incoming = ArrayList<Int>()
+                for (kk in m.stepIndex - 1 downTo max(0, m.stepIndex - 4)) incoming.add(gi.idx[plan.steps[kk].edgeId]!!)
                 NavInstruction(
                     "route", m.type, m.roadName, m.distanceFromStartMeters - along,
                     n?.type, n?.roadName, n?.let { it.distanceFromStartMeters - m.distanceFromStartMeters },
                     turnaroundVerified = m.turnaroundVerified, approximate = approximate, ahead = ahead,
                     key = "${plan.planId}:${m.stepIndex}",
+                    lanes = laneHints(approachLanes(gi, incoming), m.type),
                 )
             }
         }
@@ -221,11 +270,18 @@ class Navigator {
         val m = upcoming.firstOrNull()
         val n = upcoming.getOrNull(1)
         val ahead = segs.map { s -> slicePolyline(gi.edges[s.edge].geometry, gi.cum[s.edge], s.from, max(s.from + 0.01, s.to)) }
+        var lanes: List<LaneHint>? = null
+        if (m != null && m.segIndex > 0) {
+            val incoming = ArrayList<Int>()
+            for (kk in m.segIndex - 1 downTo max(0, m.segIndex - 4)) incoming.add(segs[kk].edge)
+            lanes = laneHints(approachLanes(gi, incoming), m.type)
+        }
         return NavInstruction(
             "approach", m?.type ?: "continue", m?.road ?: edgeName(gi, segs.first().edge), (m?.at ?: total) - bestAlong,
             n?.type, n?.road, if (m != null && n != null) n.at - m.at else null,
             rejoinMeters = total - bestAlong, turnaroundVerified = m?.verified, approximate = approximate, ahead = ahead,
             key = "ap:$targetStep:${m?.key ?: "join"}",
+            lanes = lanes,
         )
     }
 
@@ -239,13 +295,13 @@ class Navigator {
                 val type = if (s.turnaround != null) "turnaround" else classifyTurn(angleDiff(gi.endBearing[prev], gi.startBearing[s.edge]))
                 val same = edgeName(gi, prev) == edgeName(gi, s.edge)
                 if (!(type == "continue" && same) && !(type.startsWith("slight") && same)) {
-                    out.add(GuideMan(type, edgeName(gi, s.edge), d, if (s.turnaround != null) s.turnaround == "verified" else null, "$k:${s.edge}"))
+                    out.add(GuideMan(type, edgeName(gi, s.edge), d, if (s.turnaround != null) s.turnaround == "verified" else null, "$k:${s.edge}", k))
                 }
             }
             d += s.to - s.from
         }
         // Joining the planned route: announce the first maneuver of the route from the join point.
-        out.add(GuideMan("join", edgeName(gi, gi.idx[plan.steps[targetStep].edgeId]!!), d, null, "join"))
+        out.add(GuideMan("join", edgeName(gi, gi.idx[plan.steps[targetStep].edgeId]!!), d, null, "join", -1))
         return out
     }
 

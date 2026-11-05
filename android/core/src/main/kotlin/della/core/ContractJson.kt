@@ -115,7 +115,7 @@ object ContractJson {
         "eligibilityReason" to str(e.eligibilityReason),
         "dataConfidence" to JsonPrimitive(e.dataConfidence),
         "provenance" to JsonPrimitive(e.provenance),
-    )
+    ).let { o -> if (e.turnLanes == null) o else JsonObject(LinkedHashMap(o).apply { put("turnLanes", JsonArray(e.turnLanes.map { strs(it) })) }) }
 
     fun decodeEdge(el: JsonElement): DirectedEdge = el.o().run {
         val vl = req("vehicleLimits").o()
@@ -129,6 +129,7 @@ object ContractJson {
             vehicleLimits = VehicleLimits(vl.ln("maxWidthCm"), vl.ln("maxHeightCm"), vl.ln("maxWeightKg")),
             eligibility = s("eligibility"), eligibilityReason = sn("eligibilityReason"), dataConfidence = s("dataConfidence"),
             provenance = s("provenance"),
+            turnLanes = this["turnLanes"]?.takeIf { it !is JsonNull }?.a()?.map { l -> l.a().map { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content ?: fail("turnLanes: expected strings") } },
         )
     }
 

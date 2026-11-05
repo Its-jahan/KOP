@@ -60,6 +60,7 @@ object Conformance {
             "edgeIds" to strs(g.directedEdges.map { it.edgeId }),
             "eligibility" to JsonObject(g.directedEdges.associate { it.edgeId to JsonPrimitive(it.eligibility) }),
             "eligibilityReason" to JsonObject(g.directedEdges.filter { truthy(it.eligibilityReason) }.associate { it.edgeId to JsonPrimitive(it.eligibilityReason!!) }),
+            "turnLanes" to JsonObject(g.directedEdges.filter { it.turnLanes != null }.associate { e -> e.edgeId to JsonPrimitive(e.turnLanes!!.joinToString("|") { it.joinToString(";") }) }),
             "nodePassage" to JsonObject(g.nodes.filter { it.passage != "free" }.associate { it.nodeId to JsonPrimitive(it.passage) }),
             "restrictions" to JsonArray(
                 g.turnRestrictions.map { r ->

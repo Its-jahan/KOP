@@ -31,6 +31,9 @@ import org.maplibre.android.maps.Style
 import org.maplibre.android.style.sources.GeoJsonSource
 import kotlin.math.hypot
 
+/** Zoom step request (id makes repeated presses distinct). */
+data class ZoomCmd(val id: Long, val delta: Double)
+
 private const val EMPTY_FC = "{\"type\":\"FeatureCollection\",\"features\":[]}"
 
 /** Style: OSM raster + our overlay layers. Directed coverage is offset to the right of travel. */
@@ -51,43 +54,43 @@ val MAP_STYLE = """
   "layers": [
     {"id": "osm", "type": "raster", "source": "osm"},
     {"id": "zone-fill", "type": "fill", "source": "zone", "filter": ["==", ["geometry-type"], "Polygon"],
-     "paint": {"fill-color": "#1565C0", "fill-opacity": 0.07}},
+     "paint": {"fill-color": "#1A73E8", "fill-opacity": 0.06}},
     {"id": "zone-line", "type": "line", "source": "zone", "filter": ["!=", ["geometry-type"], "Point"],
-     "paint": {"line-color": "#1565C0", "line-width": 3, "line-dasharray": [2, 1]}},
+     "paint": {"line-color": "#1A73E8", "line-width": 2.5, "line-dasharray": [3, 2]}},
     {"id": "plan-line", "type": "line", "source": "plan", "layout": {"line-cap": "round", "line-join": "round"},
-     "paint": {"line-color": ["match", ["get", "kind"], "outside", "#EF6C00", "#3949AB"], "line-width": 12, "line-opacity": 0.28}},
+     "paint": {"line-color": ["match", ["get", "kind"], "outside", "#C2185B", "approach", "#C2185B", "#1A73E8"], "line-width": ["interpolate", ["linear"], ["zoom"], 13, 4, 18, 12], "line-opacity": 0.35}},
     {"id": "coverage-line", "type": "line", "source": "coverage", "layout": {"line-join": "round"},
-     "paint": {"line-color": ["match", ["get", "status"], "covered", "#2E7D32", "partial", "#F9A825", "blocked", "#4E342E",
-                              "unreachable", "#757575", "needsReview", "#8E24AA", "#D32F2F"],
+     "paint": {"line-color": ["match", ["get", "status"], "covered", "#12A150", "partial", "#F4B400", "blocked", "#6B7280",
+                              "unreachable", "#8E5CC4", "needsReview", "#A0785A", "#FF5A1F"],
                "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1.5, 17, 4.5],
                "line-offset": ["interpolate", ["linear"], ["zoom"], 13, 1.2, 17, 4.0]}},
     {"id": "visited-line", "type": "line", "source": "visited", "layout": {"line-join": "round"},
-     "paint": {"line-color": "#1B5E20", "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1.5, 17, 4.5],
+     "paint": {"line-color": "#12A150", "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1.5, 17, 4.5],
                "line-offset": ["interpolate", ["linear"], ["zoom"], 13, 1.2, 17, 4.0]}},
     {"id": "coverage-arrows", "type": "symbol", "source": "coverage", "minzoom": 15.5,
      "layout": {"symbol-placement": "line", "symbol-spacing": 60, "icon-image": "arrow", "icon-size": 0.5,
                 "icon-offset": [0, 8], "icon-allow-overlap": true, "icon-ignore-placement": true,
                 "icon-rotation-alignment": "map", "icon-keep-upright": false}},
     {"id": "zone-vertex", "type": "circle", "source": "zone", "filter": ["==", ["geometry-type"], "Point"],
-     "paint": {"circle-radius": 11, "circle-color": "#FFFFFF", "circle-stroke-color": "#1565C0", "circle-stroke-width": 4}},
+     "paint": {"circle-radius": 11, "circle-color": "#FFFFFF", "circle-stroke-color": "#1A73E8", "circle-stroke-width": 3}},
     {"id": "marker-requested", "type": "circle", "source": "markers", "filter": ["==", ["get", "kind"], "requested"],
      "paint": {"circle-radius": 6, "circle-color": "#9E9E9E", "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 2}},
     {"id": "marker-snapped", "type": "circle", "source": "markers", "filter": ["==", ["get", "kind"], "snapped"],
-     "paint": {"circle-radius": 10, "circle-color": "#00897B", "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 3}},
+     "paint": {"circle-radius": 10, "circle-color": "#12A150", "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 3}},
     {"id": "marker-snapped-dir", "type": "symbol", "source": "markers", "filter": ["==", ["get", "kind"], "snapped"],
      "layout": {"icon-image": "arrow", "icon-size": 1.1, "icon-rotate": ["-", ["get", "bearing"], 90],
                 "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-offset": [26, 0]}},
     {"id": "ahead-casing", "type": "line", "source": "ahead", "layout": {"line-cap": "round", "line-join": "round"},
-     "paint": {"line-color": "#0D47A1", "line-width": ["interpolate", ["linear"], ["zoom"], 13, 7, 18, 20]}},
+     "paint": {"line-color": "#0B3D91", "line-width": ["interpolate", ["linear"], ["zoom"], 13, 8, 18, 22]}},
     {"id": "ahead-line", "type": "line", "source": "ahead", "layout": {"line-cap": "round", "line-join": "round"},
-     "paint": {"line-color": "#42A5F5", "line-width": ["interpolate", ["linear"], ["zoom"], 13, 4, 18, 14]}},
+     "paint": {"line-color": "#1A73E8", "line-width": ["interpolate", ["linear"], ["zoom"], 13, 5, 18, 16]}},
     {"id": "ahead-arrows", "type": "symbol", "source": "ahead",
      "layout": {"symbol-placement": "line", "symbol-spacing": 80, "icon-image": "arrow", "icon-size": 0.7,
                 "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-rotation-alignment": "map", "icon-keep-upright": false}},
     {"id": "location-acc", "type": "circle", "source": "location",
-     "paint": {"circle-radius": 16, "circle-color": ["case", ["==", ["get", "reliable"], true], "#1E88E5", "#FB8C00"], "circle-opacity": 0.25}},
+     "paint": {"circle-radius": 16, "circle-color": ["case", ["==", ["get", "reliable"], true], "#1A73E8", "#F59F00"], "circle-opacity": 0.12}},
     {"id": "location", "type": "circle", "source": "location", "filter": ["<", ["get", "bearing"], 0],
-     "paint": {"circle-radius": 10, "circle-color": ["case", ["==", ["get", "reliable"], true], "#1E88E5", "#FB8C00"], "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 3}},
+     "paint": {"circle-radius": 10, "circle-color": ["case", ["==", ["get", "reliable"], true], "#1A73E8", "#F59F00"], "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 3}},
     {"id": "location-heading", "type": "symbol", "source": "location", "filter": [">=", ["get", "bearing"], 0],
      "layout": {"icon-image": "vehicle", "icon-size": 1.0, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map",
                 "icon-allow-overlap": true, "icon-ignore-placement": true}}
@@ -124,7 +127,7 @@ private fun vehicleBitmap(): Bitmap {
         lineTo(size * 0.12f, size * 0.9f)
         close()
     }
-    c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(30, 136, 229); style = Paint.Style.FILL })
+    c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(26, 115, 232); style = Paint.Style.FILL })
     c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 6f })
     return bmp
 }
@@ -135,6 +138,7 @@ private class MapHolder {
     var style: Style? = null
     val applied = HashMap<String, String>()
     var lastCamera = -1L
+    var lastZoom = 0L
     var dragIndex = -1
     var latest: MapLayers? = null
 
@@ -170,6 +174,8 @@ fun MapPane(
     modifier: Modifier = Modifier,
     /** While driving: de-emphasise the coverage network so the guided route stands out. */
     driving: Boolean = false,
+    /** One-shot zoom step from the floating +/- buttons. */
+    zoom: ZoomCmd? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -280,9 +286,13 @@ fun MapPane(
             st.getLayer("coverage-line")?.setProperties(org.maplibre.android.style.layers.PropertyFactory.lineOpacity(op))
             st.getLayer("visited-line")?.setProperties(org.maplibre.android.style.layers.PropertyFactory.lineOpacity(op))
             st.getLayer("coverage-arrows")?.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(if (driving) "none" else "visible"))
-            st.getLayer("plan-line")?.setProperties(org.maplibre.android.style.layers.PropertyFactory.lineOpacity(if (driving) 0.18f else 0.28f))
+            st.getLayer("plan-line")?.setProperties(org.maplibre.android.style.layers.PropertyFactory.lineOpacity(if (driving) 0.15f else 0.35f))
         }
         val map = holder.map
+        if (map != null && zoom != null && zoom.id != holder.lastZoom) {
+            holder.lastZoom = zoom.id
+            map.animateCamera(CameraUpdateFactory.zoomBy(zoom.delta), 250)
+        }
         if (map != null && camera != null && camera.id != holder.lastCamera) {
             holder.lastCamera = camera.id
             if (camera.follow) {

@@ -1,9 +1,10 @@
-// Compose UI: preparation (parked) flow, driving view, diagnostics, settings and dialogs.
-// Landscape-first with a side panel; portrait stacks map above the panel. Large targets.
+// Compose UI (map-first navigator, mirrors web/src/ui/App.tsx): full-screen map with floating
+// controls, preparation as a 3-step bottom sheet (side panel on wide landscape screens), menu
+// drawer, driving HUD (DriveHud.kt) and full-screen pages (Pages.kt).
 package com.della.coveragenavigator
 
 import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,10 +22,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -34,13 +40,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
@@ -50,18 +52,26 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -69,16 +79,40 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
+// ------------------------------------------------------------------ palette (= web PALETTE)
+
+object Palette {
+    val todo = Color(0xFFFF5A1F)
+    val done = Color(0xFF12A150)
+    val partial = Color(0xFFF4B400)
+    val blocked = Color(0xFF6B7280)
+    val unreach = Color(0xFF8E5CC4)
+    val review = Color(0xFFA0785A)
+    val route = Color(0xFF1A73E8)
+    val routeCasing = Color(0xFF0B3D91)
+    val plan = Color(0xFF1A73E8)
+    val outside = Color(0xFFC2185B)
+    val primary = Color(0xFF1A73E8)
+    val go = Color(0xFF12A150)
+    val danger = Color(0xFFD92D20)
+    val warn = Color(0xFFB45309)
+    val ok = Color(0xFF0F7B3F)
+    val hud = Color(0xFF1F2937)
+    val hudNow = Color(0xFF0F7B3F)
+}
+
 // ------------------------------------------------------------------ formatting helpers
 
 fun fmtMeters(m: Double): String =
     if (m >= 1000) String.format(Locale.getDefault(), "%.2f km", m / 1000) else String.format(Locale.getDefault(), "%.0f m", m)
 
 fun fmtArea(m2: Double): String =
-    if (m2 >= 1_000_000) String.format(Locale.getDefault(), "%.2f km²", m2 / 1_000_000) else String.format(Locale.getDefault(), "%.0f m²", m2)
+    if (m2 >= 1_000_000) String.format(Locale.getDefault(), "%.3f km²", m2 / 1_000_000) else String.format(Locale.getDefault(), "%.0f m²", m2)
+
+fun fmtInt(n: Int): String = String.format(Locale.getDefault(), "%d", n)
 
 @Composable
-private fun zoneErrorText(code: String): String = when (code) {
+internal fun zoneErrorText(code: String): String = when (code) {
     "self_intersection" -> stringResource(R.string.zone_err_self_intersection)
     "too_small" -> stringResource(R.string.zone_err_too_small)
     "duplicate_vertex" -> stringResource(R.string.zone_err_duplicate)
@@ -90,7 +124,7 @@ private fun zoneErrorText(code: String): String = when (code) {
 }
 
 @Composable
-private fun gpsStateText(state: String): String = when (state) {
+internal fun gpsStateText(state: String): String = when (state) {
     "acquiring" -> stringResource(R.string.gps_acquiring)
     "reliable" -> stringResource(R.string.gps_reliable)
     "weak" -> stringResource(R.string.gps_weak)
@@ -103,7 +137,7 @@ private fun gpsStateText(state: String): String = when (state) {
 }
 
 @Composable
-private fun maneuverText(type: String): String = when (type) {
+internal fun maneuverText(type: String): String = when (type) {
     "depart" -> stringResource(R.string.mv_depart)
     "continue" -> stringResource(R.string.mv_continue)
     "slight_right" -> stringResource(R.string.mv_slight_right)
@@ -114,32 +148,24 @@ private fun maneuverText(type: String): String = when (type) {
     "sharp_left" -> stringResource(R.string.mv_sharp_left)
     "turnaround" -> stringResource(R.string.mv_turnaround)
     "arrive" -> stringResource(R.string.mv_arrive)
-    else -> type
+    else -> stringResource(R.string.mv_continue)
 }
 
-private fun maneuverGlyph(type: String): String = when (type) {
+/** Same glyphs as web MANEUVER_ICON. */
+internal fun maneuverGlyph(type: String): String = when (type) {
     "slight_right" -> "↗"
     "right" -> "→"
     "sharp_right" -> "↘"
     "slight_left" -> "↖"
     "left" -> "←"
     "sharp_left" -> "↙"
-    "turnaround" -> "↶"
-    "arrive" -> "◉"
+    "turnaround" -> "⤸"
+    "arrive" -> "■"
     else -> "↑"
 }
 
 @Composable
-private fun legKindText(kind: String): String = when (kind) {
-    "required" -> stringResource(R.string.leg_required)
-    "transit" -> stringResource(R.string.leg_transit)
-    "outside" -> stringResource(R.string.leg_outside)
-    "approach" -> stringResource(R.string.leg_approach)
-    else -> kind
-}
-
-@Composable
-private fun causeText(cause: String): String = when (cause) {
+internal fun causeText(cause: String): String = when (cause) {
     "outside_policy" -> stringResource(R.string.cause_outside_policy)
     "not_reachable_from_start" -> stringResource(R.string.cause_not_reachable)
     "needs_review" -> stringResource(R.string.cause_needs_review)
@@ -149,7 +175,7 @@ private fun causeText(cause: String): String = when (cause) {
 }
 
 @Composable
-private fun planStatusText(status: String?): String = when (status) {
+internal fun planStatusText(status: String?): String = when (status) {
     "complete" -> stringResource(R.string.plan_complete)
     "partial" -> stringResource(R.string.plan_partial)
     "failed" -> stringResource(R.string.plan_failed)
@@ -160,7 +186,7 @@ private fun planStatusText(status: String?): String = when (status) {
 }
 
 @Composable
-private fun failureText(code: String?): String = when {
+internal fun failureText(code: String?): String = when {
     code == null -> ""
     code == "provider_quota_exceeded" -> stringResource(R.string.fail_quota)
     code == "provider_timeout" -> stringResource(R.string.fail_timeout)
@@ -170,13 +196,31 @@ private fun failureText(code: String?): String = when {
     else -> stringResource(R.string.fail_other, code)
 }
 
+/** surface-2 of the web tokens (segmented controls, plan card, round buttons). */
+@Composable
+internal fun surface2(): Color = MaterialTheme.colorScheme.surfaceVariant
+
+@Composable
+internal fun mutedColor(): Color = MaterialTheme.colorScheme.onSurfaceVariant
+
 // ------------------------------------------------------------------ root
 
 @Composable
 fun AppRoot(engine: Engine, bridge: UiBridge, actions: AppActions) {
     val state by engine.ui.collectAsState()
     val dark = isSystemInDarkTheme()
-    MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
+    val scheme = if (dark) {
+        darkColorScheme(
+            primary = Palette.primary, background = Color(0xFF0B0F14), surface = Color(0xFF161B22), surfaceVariant = Color(0xFF21262D),
+            onSurface = Color(0xFFF3F4F6), onSurfaceVariant = Color(0xFF9CA3AF), outline = Color(0xFF30363D),
+        )
+    } else {
+        lightColorScheme(
+            primary = Palette.primary, background = Color.White, surface = Color.White, surfaceVariant = Color(0xFFF3F4F6),
+            onSurface = Color(0xFF111827), onSurfaceVariant = Color(0xFF6B7280), outline = Color(0xFFE5E7EB), error = Palette.danger,
+        )
+    }
+    MaterialTheme(colorScheme = scheme) {
         val snackbar = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
@@ -188,48 +232,205 @@ fun AppRoot(engine: Engine, bridge: UiBridge, actions: AppActions) {
             val m = state.message ?: return@LaunchedEffect
             snackbar.showSnackbar(context.getString(m.id, *m.args.toTypedArray()))
         }
+        var menuOpen by rememberSaveable { mutableStateOf(false) }
+        var legendOpen by rememberSaveable { mutableStateOf(false) }
+        var zoomSeq by remember { mutableLongStateOf(0L) }
+        var zoom by remember { mutableStateOf<ZoomCmd?>(null) }
+        val inDrive = state.screen == Screen.DRIVE && state.drive.sessionId != null
+        val page = state.screen == Screen.DIAGNOSTICS || state.screen == Screen.SETTINGS || state.screen == Screen.SESSIONS
+        val drawing = state.screen == Screen.PREPARE && state.tapMode == TapMode.ZONE && state.zone.mode == ZoneMode.POLYGON && state.drive.sessionId == null
+
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Box(Modifier.fillMaxSize().safeDrawingPadding()) {
-                when (state.screen) {
-                    Screen.PREPARE -> PrepareScreen(state, engine, actions)
-                    Screen.DRIVE -> DriveScreen(state, engine, actions)
-                    Screen.DIAGNOSTICS -> DiagnosticsScreen(state, engine, actions)
-                    Screen.SETTINGS -> SettingsScreen(engine, actions)
+            Box(Modifier.fillMaxSize()) {
+                // One full-screen map for every mode.
+                MapPane(
+                    layers = state.layers, camera = state.camera,
+                    vertices = if (drawing) state.zone.vertices else emptyList(), dragEnabled = drawing,
+                    onTap = { if (state.screen == Screen.PREPARE) engine.mapTap(it) },
+                    onVertexMoved = { i, p, f -> engine.moveVertex(i, p, f) },
+                    onUserPan = { if (inDrive && state.follow) engine.setFollow(false) },
+                    modifier = Modifier.fillMaxSize(), driving = inDrive, zoom = zoom,
+                )
+                Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val wide = maxWidth >= 900.dp && maxWidth > maxHeight
+                        val h = maxHeight
+                        // right-side map controls (always on the right, as on the web); below the sheet
+                        Column(
+                            Modifier.align(if (inDrive) AbsoluteAlignment.BottomRight else AbsoluteAlignment.CenterRight)
+                                .padding(end = 10.dp, bottom = if (inDrive) (if (wide) 24.dp else 150.dp) else 0.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Fab("+", stringResource(R.string.zoom_in)) { zoom = ZoomCmd(++zoomSeq, 1.0) }
+                            Fab("−", stringResource(R.string.zoom_out)) { zoom = ZoomCmd(++zoomSeq, -1.0) }
+                            Fab("◧", stringResource(R.string.legend)) { legendOpen = !legendOpen }
+                            if (inDrive && state.drive.status == "active") {
+                                Fab(if (state.drive.voiceOn) "🔊" else "🔇", stringResource(if (state.drive.voiceOn) R.string.voice_on else R.string.voice_off)) {
+                                    engine.setVoice(!state.drive.voiceOn)
+                                }
+                            }
+                            val on = state.follow && inDrive
+                            Fab("➤", stringResource(R.string.my_location), bg = if (on) Palette.primary else null, fg = if (on) Color.White else Palette.primary) {
+                                actions.showMyLocation()
+                            }
+                        }
+                        // "where am I" chip: above the drive bar, or beside the side panel on wide screens
+                        if (inDrive || wide) {
+                            Box(
+                                Modifier.align(AbsoluteAlignment.BottomLeft)
+                                    .padding(start = if (wide) (if (inDrive) 584.dp else 424.dp) else 10.dp, bottom = if (wide) 16.dp else 150.dp),
+                            ) { WhereChip(state, actions) }
+                        }
+
+                        if (!inDrive) PrepareSheet(state, engine, actions, wide, h)
+                        else DriveHud(state, engine, actions, wide, onMenu = { menuOpen = true })
+
+                        // top-left: menu + search (prepare)
+                        if (!inDrive) {
+                            Column(
+                                Modifier.align(AbsoluteAlignment.TopLeft).padding(start = 10.dp, top = 10.dp, end = if (wide) 10.dp else 72.dp)
+                                    .widthIn(max = if (wide) 400.dp else 560.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Fab("☰", stringResource(R.string.menu), size = 44.dp) { menuOpen = true }
+                                    PlaceSearch(engine, Modifier.weight(1f))
+                                }
+                                if (state.labMode) LabBanner()
+                                if (!wide) WhereChip(state, actions)
+                            }
+                            state.recovery?.let {
+                                Box(Modifier.align(AbsoluteAlignment.TopLeft).padding(start = if (wide) 424.dp else 10.dp, top = if (wide) 10.dp else 104.dp, end = 72.dp)) {
+                                    ResumeBanner(it, engine)
+                                }
+                            }
+                        } else if (state.labMode) {
+                            Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp)) { LabBanner() }
+                        }
+                        if (legendOpen) LegendPopover(Modifier.align(AbsoluteAlignment.CenterRight).padding(end = 70.dp)) { legendOpen = false }
+                        if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
+                    }
                 }
-                SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter))
-                if (state.labMode) LabBanner(Modifier.align(Alignment.TopCenter))
-                if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
+                if (page) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+                            when (state.screen) {
+                                Screen.DIAGNOSTICS -> DiagnosticsScreen(state, engine, actions)
+                                Screen.SETTINGS -> SettingsScreen(state, engine, actions)
+                                Screen.SESSIONS -> SessionsScreen(state, engine, actions)
+                                else -> {}
+                            }
+                        }
+                    }
+                }
+                if (menuOpen) MenuDrawer(state, engine, actions) { menuOpen = false }
+                SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 96.dp))
             }
-            state.recovery?.let { RecoveryDialog(it, engine) }
-            state.connectorOffer?.let { ConnectorDialog(it, engine) }
             state.outsideApproval?.let { OutsideApprovalDialog(it, engine) }
         }
     }
 }
 
+// ------------------------------------------------------------------ building blocks
+
 @Composable
-private fun LabBanner(modifier: Modifier) {
+internal fun Fab(glyph: String, label: String, size: Dp = 48.dp, bg: Color? = null, fg: Color? = null, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape, color = bg ?: MaterialTheme.colorScheme.surface, shadowElevation = 4.dp,
+        modifier = Modifier.size(size).semantics { contentDescription = label }.clickable(onClick = onClick),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(glyph, fontSize = 21.sp, color = fg ?: MaterialTheme.colorScheme.onSurface)
+        }
+    }
+}
+
+@Composable
+private fun LabBanner() {
     Text(
-        stringResource(R.string.lab_banner), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp,
-        modifier = modifier.background(Color(0xFFC62828), RoundedCornerShape(8.dp)).padding(horizontal = 16.dp, vertical = 6.dp),
+        stringResource(R.string.lab_banner), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp,
+        modifier = Modifier.background(Color(0xFFC62828), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 4.dp),
     )
 }
 
+/** Large primary action (web `button.big`). */
 @Composable
-private fun BigButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, color: Color? = null, onClick: () -> Unit) {
+internal fun BigButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, color: Color = Palette.primary, onClick: () -> Unit) {
     Button(
-        onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 56.dp),
-        colors = if (color != null) ButtonDefaults.buttonColors(containerColor = color) else ButtonDefaults.buttonColors(),
-    ) { Text(text, fontSize = 17.sp) }
+        onClick = onClick, enabled = enabled, modifier = modifier.fillMaxWidth().heightIn(min = 54.dp), shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = Color.White),
+    ) { Text(text, fontSize = 17.sp, fontWeight = FontWeight.Bold) }
 }
 
 @Composable
-private fun SmallButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 52.dp)) { Text(text, fontSize = 15.sp) }
+internal fun SmallButton(text: String, modifier: Modifier = Modifier, enabled: Boolean = true, primary: Boolean = false, onClick: () -> Unit) {
+    if (primary) {
+        Button(
+            onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 46.dp), shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Palette.primary, contentColor = Color.White),
+        ) { Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
+    } else {
+        OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier.heightIn(min = 46.dp), shape = RoundedCornerShape(12.dp)) {
+            Text(text, fontSize = 15.sp)
+        }
+    }
 }
 
 @Composable
-private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+internal fun LinkText(text: String, onClick: () -> Unit) {
+    Text(text, color = Palette.primary, fontSize = 14.sp, modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 6.dp, vertical = 4.dp))
+}
+
+/** Segmented control (web `.seg`). */
+@Composable
+internal fun Segmented(options: List<Pair<String, Boolean>>, enabled: Boolean = true, onSelect: (Int) -> Unit) {
+    Row(Modifier.background(surface2(), RoundedCornerShape(12.dp)).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        options.forEachIndexed { i, (label, on) ->
+            Box(
+                Modifier
+                    .then(if (on) Modifier.shadow(1.dp, RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp)) else Modifier)
+                    .clickable(enabled = enabled) { onSelect(i) }
+                    .heightIn(min = 40.dp).padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label, fontSize = 14.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (on) MaterialTheme.colorScheme.onSurface else mutedColor(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun IconBtn(glyph: String, label: String, enabled: Boolean = true, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick, enabled = enabled, shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.heightIn(min = 44.dp).widthIn(min = 44.dp).semantics { contentDescription = label },
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp),
+    ) { Text(glyph, fontSize = 18.sp) }
+}
+
+@Composable
+internal fun CheckRow(checked: Boolean, label: String, enabled: Boolean = true, color: Color? = null, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(enabled = enabled) { onChange(!checked) }) {
+        Checkbox(checked = checked, enabled = enabled, onCheckedChange = { onChange(it) })
+        Text(label, fontSize = 14.sp, color = color ?: MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+/** Collapsible "details" (web `<details>`). */
+@Composable
+internal fun Expander(title: String, content: @Composable ColumnScope.() -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        Text((if (open) "▾ " else "▸ ") + title, fontSize = 13.sp, color = mutedColor(), modifier = Modifier.clickable { open = !open }.padding(vertical = 6.dp))
+        if (open) Column(Modifier.padding(start = 12.dp), content = content)
+    }
+}
+
+@Composable
+internal fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(4.dp))
@@ -239,434 +440,447 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
     }
 }
 
+// ------------------------------------------------------------------ search + chips
+
 @Composable
-private fun SplitLayout(map: @Composable (Modifier) -> Unit, panel: @Composable (Modifier) -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val w = maxWidth
-        val h = maxHeight
-        if (w > h) {
-            Row(Modifier.fillMaxSize()) {
-                map(Modifier.weight(1f).fillMaxHeight())
-                panel(Modifier.width(if (w > 900.dp) 420.dp else 360.dp).fillMaxHeight())
+private fun PlaceSearch(engine: Engine, modifier: Modifier) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var query by rememberSaveable { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<PlaceResult>?>(null) }
+    var searching by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    fun run() {
+        if (query.isBlank() || searching) return
+        searching = true
+        error = null
+        scope.launch {
+            try {
+                results = withContext(Dispatchers.IO) { Nominatim.search(query.trim(), Localized.language(context)) }
+            } catch (e: Exception) {
+                error = context.getString(R.string.search_failed, e.message ?: e.javaClass.simpleName)
+            }
+            searching = false
+        }
+    }
+    Column(modifier) {
+        Surface(shape = RoundedCornerShape(22.dp), shadowElevation = 4.dp, color = MaterialTheme.colorScheme.surface, modifier = Modifier.height(44.dp).fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 14.dp, end = 6.dp)) {
+                Text("⌕", fontSize = 18.sp, color = mutedColor())
+                Spacer(Modifier.width(6.dp))
+                Box(Modifier.weight(1f)) {
+                    if (query.isEmpty()) Text(stringResource(R.string.search_hint), color = mutedColor(), fontSize = 14.sp, maxLines = 1)
+                    BasicTextField(
+                        value = query, onValueChange = { query = it }, singleLine = true,
+                        textStyle = TextStyle(fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { run() }),
+                        modifier = Modifier.fillMaxWidth().semantics { contentDescription = context.getString(R.string.search) },
+                    )
+                }
+                if (searching) Text(stringResource(R.string.search) + "…", fontSize = 12.sp, color = mutedColor())
+                else if (query.isNotBlank()) TextButton(onClick = { run() }) { Text(stringResource(R.string.search)) }
+            }
+        }
+        val r = results
+        if (error != null || (r != null && r.isEmpty())) {
+            Text(
+                error ?: stringResource(R.string.search_none), fontSize = 13.sp,
+                modifier = Modifier.padding(top = 6.dp).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
+        if (r != null && r.isNotEmpty()) {
+            Surface(shape = RoundedCornerShape(16.dp), shadowElevation = 4.dp, modifier = Modifier.padding(top = 6.dp).heightIn(max = 320.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(6.dp)) {
+                    r.forEach { p ->
+                        val parts = p.displayName.split(",")
+                        Column(
+                            Modifier.fillMaxWidth().clickable {
+                                if (p.south != null && p.north != null && p.west != null && p.east != null) engine.focus(p.south, p.west, p.north, p.east)
+                                else engine.focus(p.lat - 0.02, p.lon - 0.02, p.lat + 0.02, p.lon + 0.02)
+                                results = null
+                                query = parts[0]
+                            }.padding(horizontal = 10.dp, vertical = 8.dp),
+                        ) {
+                            Text(parts[0].trim(), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(parts.drop(1).take(2).joinToString(",").trim(), fontSize = 12.sp, color = mutedColor(), maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WhereChip(state: UiState, actions: AppActions) {
+    val me = state.myLocation
+    val text = when {
+        me != null -> stringResource(R.string.you_are_here) + (me.accuracy?.let { String.format(Locale.getDefault(), " · ±%.0f m", it) } ?: "")
+        state.myLocationState == "permission_denied" -> stringResource(R.string.gps_permission_denied)
+        state.myLocationState == "location_disabled" -> stringResource(R.string.gps_location_disabled)
+        else -> stringResource(R.string.locating)
+    }
+    Surface(shape = RoundedCornerShape(50), shadowElevation = 2.dp, color = MaterialTheme.colorScheme.surface, modifier = Modifier.clickable { actions.showMyLocation() }) {
+        Text(text, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp))
+    }
+}
+
+@Composable
+private fun ResumeBanner(r: RecoveryOffer, engine: Engine) {
+    Surface(shape = RoundedCornerShape(16.dp), shadowElevation = 4.dp, color = MaterialTheme.colorScheme.surface) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.resume_banner) + if (r.lab) " · " + stringResource(R.string.lab_banner) else "", fontSize = 14.sp, modifier = Modifier.weight(1f, fill = false))
+            SmallButton(stringResource(R.string.recovery_resume), primary = true) { engine.resumeRecovered() }
+            TextButton(onClick = { engine.dismissRecovery() }) { Text("×", fontSize = 18.sp) }
+        }
+    }
+}
+
+@Composable
+internal fun LegendPopover(modifier: Modifier, onClose: (() -> Unit)?) {
+    Surface(shape = RoundedCornerShape(16.dp), shadowElevation = 6.dp, modifier = modifier.widthIn(max = 300.dp)) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.legend), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (onClose != null) TextButton(onClick = onClose) { Text("×", fontSize = 18.sp) }
+            }
+            LegendRow(Palette.todo, stringResource(R.string.legend_unvisited))
+            LegendRow(Palette.done, stringResource(R.string.legend_covered))
+            LegendRow(Palette.partial, stringResource(R.string.legend_partial))
+            LegendRow(Palette.route, stringResource(R.string.legend_route_ahead), thick = true)
+            LegendRow(Palette.plan.copy(alpha = 0.5f), stringResource(R.string.legend_plan), thick = true)
+            LegendRow(Palette.outside.copy(alpha = 0.5f), stringResource(R.string.legend_outside), thick = true)
+            LegendRow(Palette.blocked, stringResource(R.string.legend_blocked), dashed = true)
+            LegendRow(Palette.unreach, stringResource(R.string.legend_unreachable), dashed = true)
+            LegendRow(Palette.review, stringResource(R.string.legend_needs_review), dashed = true)
+            Text(stringResource(R.string.legend_directions_short), fontSize = 12.sp, color = mutedColor(), modifier = Modifier.padding(top = 4.dp))
+        }
+    }
+}
+
+@Composable
+private fun LegendRow(c: Color, label: String, thick: Boolean = false, dashed: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 3.dp)) {
+        if (dashed) {
+            Row(Modifier.width(34.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                repeat(4) { Box(Modifier.width(6.dp).height(5.dp).background(c, RoundedCornerShape(2.dp))) }
             }
         } else {
-            Column(Modifier.fillMaxSize()) {
-                map(Modifier.weight(1f).fillMaxWidth())
-                panel(Modifier.fillMaxWidth().height(h * 0.48f))
-            }
+            Box(Modifier.width(34.dp).height(if (thick) 9.dp else 5.dp).background(c, RoundedCornerShape(3.dp)))
         }
+        Spacer(Modifier.width(10.dp))
+        Text(label, fontSize = 14.sp)
     }
 }
 
-// ------------------------------------------------------------------ preparation
+// ------------------------------------------------------------------ menu drawer
 
 @Composable
-fun PrepareScreen(state: UiState, engine: Engine, actions: AppActions) {
-    SplitLayout(
-        map = { mod ->
-            Box(mod) {
-                MapPane(
-                    layers = state.layers, camera = state.camera, vertices = if (state.zone.mode == ZoneMode.POLYGON) state.zone.vertices else emptyList(),
-                    dragEnabled = state.tapMode == TapMode.ZONE && state.zone.mode == ZoneMode.POLYGON,
-                    onTap = { engine.mapTap(it) }, onVertexMoved = { i, p, f -> engine.moveVertex(i, p, f) }, onUserPan = {},
-                    modifier = Modifier.fillMaxSize(),
-                )
-                WhereAmI(state, actions, Modifier.align(Alignment.BottomEnd).padding(bottom = 28.dp, end = 8.dp))
-                Text(
-                    stringResource(if (state.tapMode == TapMode.ZONE) R.string.tap_hint_zone else R.string.tap_hint_start),
-                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp).background(Color(0xCC000000), RoundedCornerShape(6.dp)).padding(8.dp),
-                    color = Color.White,
-                )
-                Text(
-                    stringResource(R.string.osm_attribution),
-                    modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).background(Color(0xCCFFFFFF)).padding(horizontal = 4.dp),
-                    color = Color.Black, fontSize = 12.sp,
-                )
-            }
-        },
-        panel = { mod -> PreparePanel(state, engine, actions, mod) },
-    )
-}
-
-@Composable
-private fun PreparePanel(state: UiState, engine: Engine, actions: AppActions, modifier: Modifier) {
-    val scope = rememberCoroutineScope()
-    var query by rememberSaveable { mutableStateOf("") }
-    var results by remember { mutableStateOf<List<PlaceResult>>(emptyList()) }
-    var searching by remember { mutableStateOf(false) }
-    var searchError by remember { mutableStateOf<String?>(null) }
+private fun MenuDrawer(state: UiState, engine: Engine, actions: AppActions, onClose: () -> Unit) {
     val context = LocalContext.current
-    Column(modifier.verticalScroll(rememberScrollState()).padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            TextButton(onClick = { engine.setScreen(Screen.DIAGNOSTICS) }) { Text(stringResource(R.string.diagnostics)) }
-            TextButton(onClick = { engine.setScreen(Screen.SETTINGS) }) { Text(stringResource(R.string.settings)) }
-        }
-        Section(stringResource(R.string.sec_search)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text(stringResource(R.string.search_hint)) }, singleLine = true, modifier = Modifier.weight(1f))
-                Spacer(Modifier.width(6.dp))
-                SmallButton(stringResource(R.string.search), enabled = query.isNotBlank() && !searching) {
-                    searching = true
-                    searchError = null
-                    scope.launch {
-                        try {
-                            results = withContext(Dispatchers.IO) { Nominatim.search(query.trim(), Localized.language(context)) }
-                            if (results.isEmpty()) searchError = context.getString(R.string.search_none)
-                        } catch (e: Exception) {
-                            searchError = context.getString(R.string.search_failed, e.message ?: e.javaClass.simpleName)
-                        }
-                        searching = false
-                    }
-                }
-            }
-            Text(stringResource(R.string.search_note), fontSize = 12.sp)
-            searchError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            results.forEach { r ->
-                Text(
-                    r.displayName, maxLines = 2,
-                    modifier = Modifier.fillMaxWidth().clickable {
-                        if (r.south != null && r.north != null && r.west != null && r.east != null) engine.focus(r.south, r.west, r.north, r.east)
-                        else engine.focus(r.lat - 0.02, r.lon - 0.02, r.lat + 0.02, r.lon + 0.02)
-                        results = emptyList()
-                    }.padding(vertical = 10.dp),
-                )
-            }
-        }
-        Section(stringResource(R.string.sec_zone)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                RadioButton(selected = state.zone.mode == ZoneMode.POLYGON, onClick = { engine.setZoneMode(ZoneMode.POLYGON) })
-                Text(stringResource(R.string.zone_polygon), modifier = Modifier.clickable { engine.setZoneMode(ZoneMode.POLYGON) })
-                Spacer(Modifier.width(12.dp))
-                RadioButton(selected = state.zone.mode == ZoneMode.CIRCLE, onClick = { engine.setZoneMode(ZoneMode.CIRCLE) })
-                Text(stringResource(R.string.zone_circle), modifier = Modifier.clickable { engine.setZoneMode(ZoneMode.CIRCLE) })
-            }
-            if (state.tapMode != TapMode.ZONE) SmallButton(stringResource(R.string.edit_zone)) { engine.setTapMode(TapMode.ZONE) }
-            if (state.zone.mode == ZoneMode.POLYGON) {
-                Text(stringResource(R.string.zone_polygon_help))
-                Text(stringResource(R.string.zone_vertices, state.zone.vertices.size))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SmallButton(stringResource(R.string.undo), enabled = state.zone.vertices.isNotEmpty()) { engine.undoVertex() }
-                    SmallButton(stringResource(R.string.clear), enabled = state.zone.vertices.isNotEmpty()) { engine.clearZone() }
-                }
-            } else {
-                Text(stringResource(R.string.zone_circle_help))
-                var radiusText by remember(state.zone.radiusMeters) { mutableStateOf(state.zone.radiusMeters.toInt().toString()) }
-                OutlinedTextField(
-                    value = radiusText, singleLine = true, label = { Text(stringResource(R.string.radius_m)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    onValueChange = { t ->
-                        radiusText = t.filter { it.isDigit() }.take(5)
-                        radiusText.toIntOrNull()?.let { if (it > 0) engine.setRadius(it.toDouble()) }
-                    },
-                )
-                Slider(value = state.zone.radiusMeters.toFloat().coerceIn(20f, 5000f), valueRange = 20f..5000f, onValueChange = { engine.setRadius(Math.round(it / 10f) * 10.0) })
-                Text(stringResource(R.string.radius_value, state.zone.radiusMeters.toInt()))
-            }
-            if (state.zone.areaSqMeters > 0) Text(stringResource(R.string.zone_area, fmtArea(state.zone.areaSqMeters), fmtMeters(state.zone.perimeterMeters)))
-            state.zone.errors.forEach { Text("• " + zoneErrorText(it), color = if (it == "large_zone") MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error) }
-        }
-        Section(stringResource(R.string.sec_graph)) {
-            BigButton(stringResource(R.string.fetch_graph), enabled = state.zone.valid && state.graph.status != "fetching", modifier = Modifier.fillMaxWidth()) { engine.fetchGraph() }
-            Text(stringResource(R.string.graph_source_note), fontSize = 12.sp)
-            when (state.graph.status) {
-                "fetching" -> {
-                    LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 4.dp))
-                    Text(stringResource(R.string.graph_fetching, state.graph.progress ?: ""))
-                }
-                "failed" -> {
-                    Text(failureText(state.graph.failureCode), color = MaterialTheme.colorScheme.error)
-                    state.graph.attempts.takeLast(4).forEach { Text("· $it", fontSize = 12.sp) }
-                }
-                "available" -> {
-                    Text(stringResource(R.string.graph_ok, state.graph.edgeCount, state.graph.nodeCount, state.graph.restrictionCount))
-                    Text(stringResource(R.string.count_required, state.counts.required, fmtMeters(state.counts.requiredMeters)))
-                    Text(stringResource(R.string.count_needs_review, state.counts.needsReview, fmtMeters(state.counts.needsReviewMeters)))
-                    Text(stringResource(R.string.count_unreachable, state.counts.unreachable, fmtMeters(state.counts.unreachableMeters)))
-                    Text(stringResource(R.string.count_blocked, state.counts.blocked))
-                    Text(stringResource(R.string.count_excluded_edges, state.graph.excludedEdges), fontSize = 12.sp)
-                    Text(stringResource(R.string.osm_attribution), fontSize = 12.sp)
-                }
-                else -> Text(stringResource(R.string.graph_none))
-            }
-        }
-        Section(stringResource(R.string.sec_start)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SmallButton(stringResource(R.string.start_tap), enabled = state.graph.status == "available") { engine.setTapMode(TapMode.START) }
-                SmallButton(stringResource(R.string.start_gps), enabled = state.graph.status == "available") { actions.useGpsForStart() }
-            }
-            val st = state.start
-            when {
-                st.error == "no_legal_road_nearby" -> Text(stringResource(R.string.start_no_road), color = MaterialTheme.colorScheme.error)
-                st.error == "no_graph" -> Text(stringResource(R.string.blocker_no_graph), color = MaterialTheme.colorScheme.error)
-                st.snappedEdgeId != null -> {
-                    Text(stringResource(R.string.start_snapped, st.roadName ?: stringResource(R.string.unnamed_road), fmtMeters(st.distanceMeters), (st.bearingDeg ?: 0.0).toInt()))
-                    if (!st.inMainComponent) Text(stringResource(R.string.start_not_main), color = MaterialTheme.colorScheme.tertiary)
-                    if (st.hasReverse) SmallButton(stringResource(R.string.start_reverse)) { engine.reverseStartDirection() }
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { engine.confirmStart(!st.confirmed) }) {
-                        Checkbox(checked = st.confirmed, onCheckedChange = { engine.confirmStart(it) })
-                        Text(stringResource(R.string.start_confirm))
-                    }
-                }
-            }
-        }
-        Section(stringResource(R.string.sec_boundary)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { engine.setStrictPolicy() }) {
-                RadioButton(selected = state.plan.policy == "STRICT_INSIDE", onClick = { engine.setStrictPolicy() })
-                Text(stringResource(R.string.policy_strict))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(enabled = state.start.snappedEdgeId != null) { engine.requestConnectors() }) {
-                RadioButton(selected = state.plan.policy == "ALLOW_NECESSARY_CONNECTORS", enabled = state.start.snappedEdgeId != null, onClick = { engine.requestConnectors() })
-                Text(stringResource(R.string.policy_connectors))
-            }
-        }
-        Section(stringResource(R.string.sec_plan)) {
-            BigButton(stringResource(R.string.compute_route), enabled = state.start.snappedEdgeId != null && !state.plan.computing, modifier = Modifier.fillMaxWidth()) { engine.previewPlan() }
-            val p = state.plan
-            if (p.computing) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 4.dp))
-            if (p.status != null) {
-                Text(stringResource(R.string.plan_status_line, planStatusText(p.status), stringResource(if (p.valid) R.string.valid else R.string.invalid)))
-                Text(stringResource(R.string.plan_totals, fmtMeters(p.totalMeters), fmtMeters(p.newCoverageMeters), fmtMeters(p.repeatMeters), fmtMeters(p.outsideMeters)))
-                p.legs.take(12).forEach { Text("· ${legKindText(it.kind)}: ${fmtMeters(it.meters)} (${it.steps})", fontSize = 13.sp) }
-                if (p.legs.size > 12) Text(stringResource(R.string.more_legs, p.legs.size - 12), fontSize = 13.sp)
-                p.unreachableByCause.forEach { (c, n) -> Text(stringResource(R.string.unplanned_cause, n, causeText(c)), color = MaterialTheme.colorScheme.tertiary) }
-                if (p.unverifiedTurnarounds > 0) Text(stringResource(R.string.plan_unverified_turnarounds, p.unverifiedTurnarounds), color = MaterialTheme.colorScheme.tertiary)
-                if (p.outsideMeters > 2.0) Text(stringResource(R.string.plan_outside_warning, fmtMeters(p.outsideMeters)), color = MaterialTheme.colorScheme.tertiary)
-                p.errors.forEach { Text("✗ $it", color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
-                Text(stringResource(R.string.plan_note, p.millis, p.iterations), fontSize = 12.sp)
-            }
-        }
-        Section(stringResource(R.string.sec_go)) {
-            val canStart = state.startBlockers.isEmpty()
-            BigButton(stringResource(R.string.start_navigation), enabled = canStart, modifier = Modifier.fillMaxWidth(), color = Color(0xFF2E7D32)) {
-                if (state.labMode) actions.startLabNavigation() else actions.startNavigation()
-            }
-            state.startBlockers.forEach { Text("• " + stringResource(it), color = MaterialTheme.colorScheme.error) }
-            Text(stringResource(R.string.safety_note), fontSize = 12.sp)
-        }
-    }
-}
-
-// ------------------------------------------------------------------ driving
-
-@Composable
-fun DriveScreen(state: UiState, engine: Engine, actions: AppActions) {
-    val d = state.drive
-    var confirmEnd by remember { mutableStateOf(false) }
-    var showExport by remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxSize()) {
-        MapPane(
-            layers = state.layers, camera = state.camera, vertices = emptyList(), dragEnabled = false,
-            onTap = {}, onVertexMoved = { _, _, _ -> }, onUserPan = { if (state.follow) engine.setFollow(false) },
-            modifier = Modifier.fillMaxSize(), driving = true,
-        )
-        Column(Modifier.align(Alignment.TopStart).padding(8.dp).widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            NavBanner(d)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                SmallButton("◎ " + stringResource(R.string.my_location)) { actions.showMyLocation() }
-                GpsChip(d.gps)
-                SmallButton(stringResource(if (d.voiceOn) R.string.voice_on else R.string.voice_off)) { engine.setVoice(!d.voiceOn) }
-                if (!state.follow && d.status == "active") SmallButton(stringResource(R.string.recenter)) { engine.setFollow(true) }
-            }
-        }
-        Text(
-            stringResource(R.string.osm_attribution),
-            modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).background(Color(0xCCFFFFFF)).padding(horizontal = 4.dp),
-            color = Color.Black, fontSize = 12.sp,
-        )
+    val lang = Localized.language(context)
+    Box(Modifier.fillMaxSize().background(Color(0x59000000)).clickable(onClick = onClose)) {
         Surface(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).widthIn(max = 560.dp),
-            shape = RoundedCornerShape(12.dp), tonalElevation = 6.dp, shadowElevation = 6.dp,
+            Modifier.align(Alignment.TopStart).fillMaxHeight().widthIn(max = 320.dp).fillMaxWidth(0.85f).clickable(enabled = false) {},
+            shadowElevation = 8.dp,
         ) {
-            Column(Modifier.padding(12.dp)) {
-                val m = d.metrics
-                if (m != null) {
-                    Text(
-                        stringResource(R.string.progress_line, fmtMeters(m.confirmedMeters), fmtMeters(m.totalRequiredMeters), m.percentConfirmed),
-                        fontSize = 20.sp, fontWeight = FontWeight.Bold,
-                    )
-                    LinearProgressIndicator(progress = { (m.percentConfirmed / 100).toFloat().coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
-                    Text(stringResource(R.string.progress_detail, fmtMeters(m.remainingMeters), fmtMeters(m.blockedMeters), fmtMeters(m.unreachableMeters), fmtMeters(m.needsReviewMeters)), fontSize = 13.sp)
-                    Text(stringResource(R.string.progress_counts, m.counts["covered"] ?: 0, m.counts["partial"] ?: 0, m.counts["unvisited"] ?: 0), fontSize = 13.sp)
+            Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(start = 14.dp, top = 6.dp, bottom = 10.dp))
+                fun go(s: Screen) {
+                    engine.setScreen(s)
+                    onClose()
                 }
-                d.recoveredNote?.let { Text(stringResource(R.string.recovered_note, it), fontSize = 12.sp) }
-                if (d.pendingWrites > 0) Text(stringResource(R.string.storage_pending, d.pendingWrites), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    when (d.status) {
-                        "active" -> BigButton(stringResource(R.string.pause)) { actions.pause() }
-                        "paused" -> BigButton(stringResource(R.string.resume), color = Color(0xFF2E7D32)) { actions.resume() }
+                if (state.drive.sessionId != null) DrawerItem("🚗 " + stringResource(R.string.drive)) { go(Screen.DRIVE) }
+                DrawerItem("🗺 " + stringResource(R.string.prepare)) { go(Screen.PREPARE) }
+                DrawerItem("🗂 " + stringResource(R.string.sessions)) { go(Screen.SESSIONS) }
+                DrawerItem("⚙ " + stringResource(R.string.settings)) { go(Screen.SETTINGS) }
+                DrawerItem("🩺 " + stringResource(R.string.diagnostics)) { go(Screen.DIAGNOSTICS) }
+                Box(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
+                    Segmented(listOf("فارسی" to (lang == "fa"), "English" to (lang == "en"))) { i ->
+                        val l = if (i == 0) "fa" else "en"
+                        if (l != lang) actions.setLanguage(l)
                     }
-                    if (d.status == "active") BigButton(stringResource(R.string.report_blocked), color = Color(0xFF6D4C41)) { engine.reportBlocked() }
                 }
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (d.status != "ended") SmallButton(stringResource(R.string.end_session)) { confirmEnd = true }
-                    if (d.status != "active") SmallButton(stringResource(R.string.export)) { showExport = true }
-                    if (d.status != "active") SmallButton(stringResource(R.string.diagnostics)) { engine.setScreen(Screen.DIAGNOSTICS) }
-                    if (d.status == "ended") SmallButton(stringResource(R.string.close_session)) { engine.closeSession() }
+                Text(stringResource(R.string.osm_attribution), fontSize = 12.sp, color = mutedColor(), modifier = Modifier.padding(horizontal = 14.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DrawerItem(text: String, onClick: () -> Unit) {
+    Text(text, fontSize = 17.sp, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 14.dp, vertical = 12.dp))
+}
+
+// ------------------------------------------------------------------ preparation sheet
+
+private enum class Step { AREA, START, ROUTE }
+
+@Composable
+private fun PrepareSheet(state: UiState, engine: Engine, actions: AppActions, wide: Boolean, screenH: Dp) {
+    val prepared = state.graph.status == "available"
+    val step = when {
+        !prepared -> Step.AREA
+        !state.start.confirmed -> Step.START
+        else -> Step.ROUTE
+    }
+    var sheetOpen by rememberSaveable { mutableStateOf(false) }
+    var picking by rememberSaveable { mutableStateOf(false) }
+    // A tap on the map picks the start; leave "picking" (compact sheet) once a start is set.
+    LaunchedEffect(state.start.requested) { if (state.start.requested != null) picking = false }
+    LaunchedEffect(step) { if (step != Step.START) picking = false }
+    val peek = !wide && (picking || (step == Step.AREA && !sheetOpen))
+    val min = !wide && step != Step.AREA && sheetOpen && !picking
+
+    val box = if (wide) {
+        Modifier.padding(start = 12.dp, top = 66.dp, bottom = 12.dp).width(400.dp).fillMaxHeight()
+    } else {
+        Modifier.fillMaxWidth().heightIn(max = screenH * (if (peek) 0.34f else if (min) 0.30f else 0.62f))
+    }
+    Box(Modifier.fillMaxSize()) {
+        Surface(
+            modifier = Modifier.align(if (wide) AbsoluteAlignment.TopLeft else Alignment.BottomCenter).then(box),
+            shape = if (wide) RoundedCornerShape(16.dp) else RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            shadowElevation = 10.dp, color = MaterialTheme.colorScheme.surface,
+        ) {
+            Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
+                if (!wide) {
+                    Box(
+                        Modifier.fillMaxWidth().clickable { sheetOpen = !sheetOpen }.padding(vertical = 8.dp).semantics { contentDescription = "sheet" },
+                        contentAlignment = Alignment.Center,
+                    ) { Box(Modifier.width(64.dp).height(5.dp).background(MaterialTheme.colorScheme.outline, RoundedCornerShape(3.dp))) }
+                } else {
+                    Spacer(Modifier.height(12.dp))
+                }
+                Stepper(step, prepared, state.start.confirmed, state.plan.status != null, compact = peek)
+                if (prepared) {
+                    val reqM = state.counts.requiredMeters - state.counts.needsReviewMeters
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                        Text(
+                            stringResource(R.string.graph_loaded) + " · " + stringResource(R.string.required_short) + " " + fmtMeters(reqM) +
+                                (if (state.counts.needsReviewMeters > 0) " · " + stringResource(R.string.needs_review_short) + " " + fmtMeters(state.counts.needsReviewMeters) else ""),
+                            fontSize = 14.sp, color = Palette.ok, modifier = Modifier.weight(1f, fill = false),
+                        )
+                        LinkText(stringResource(R.string.edit_area)) { engine.editArea() }
+                    }
+                }
+                // Scrollable step content; on the Route step "Start driving" stays pinned below it.
+                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                    when (step) {
+                        Step.AREA -> AreaStep(state, engine, peek)
+                        Step.START -> StartStep(state, engine, actions, picking, min) { picking = true }
+                        Step.ROUTE -> RouteStep(state, engine, min)
+                    }
+                }
+                if (step == Step.ROUTE) {
+                    Spacer(Modifier.height(6.dp))
+                    BigButton("▶ " + stringResource(R.string.start_driving), enabled = state.startBlockers.isEmpty(), color = Palette.go) {
+                        if (state.labMode) actions.startLabNavigation() else actions.startNavigation()
+                    }
+                    if (!min && state.startBlockers.isNotEmpty()) {
+                        Text(
+                            stringResource(R.string.start_disabled) + ": " + state.startBlockers.map { stringResource(it) }.joinToString(" · "),
+                            fontSize = 12.sp, color = mutedColor(), modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
             }
         }
     }
-    if (confirmEnd) {
-        AlertDialog(
-            onDismissRequest = { confirmEnd = false },
-            title = { Text(stringResource(R.string.end_session)) },
-            text = { Text(stringResource(R.string.end_confirm_text)) },
-            confirmButton = { TextButton(onClick = { confirmEnd = false; actions.end() }) { Text(stringResource(R.string.end_session)) } },
-            dismissButton = { TextButton(onClick = { confirmEnd = false }) { Text(stringResource(R.string.cancel)) } },
+}
+
+@Composable
+private fun Stepper(step: Step, areaDone: Boolean, startDone: Boolean, routeDone: Boolean, compact: Boolean) {
+    Row(Modifier.fillMaxWidth().padding(bottom = if (compact) 4.dp else 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        listOf(Triple(Step.AREA, R.string.step_area, areaDone), Triple(Step.START, R.string.step_start, startDone), Triple(Step.ROUTE, R.string.step_route, routeDone))
+            .forEachIndexed { i, (k, label, done) ->
+                val cur = k == step
+                Row(
+                    Modifier.weight(1f).background(surface2(), RoundedCornerShape(10.dp)).padding(horizontal = 8.dp, vertical = if (compact) 4.dp else 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Box(
+                        Modifier.size(22.dp).background(if (done) Palette.done else if (cur) Palette.primary else MaterialTheme.colorScheme.outline, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) { Text(if (done) "✓" else fmtInt(i + 1), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    Text(
+                        stringResource(label), fontSize = 14.sp, maxLines = 1,
+                        color = if (cur) MaterialTheme.colorScheme.onSurface else mutedColor(), fontWeight = if (cur) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                }
+            }
+    }
+}
+
+@Composable
+private fun StatusLine(text: String, color: Color? = null) {
+    Text(text, fontSize = 15.sp, color = color ?: MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(vertical = 6.dp))
+}
+
+@Composable
+private fun ButtonRow(content: @Composable RowScope.() -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp), content = content)
+}
+
+@Composable
+private fun AreaStep(state: UiState, engine: Engine, peek: Boolean) {
+    val z = state.zone
+    val fetching = state.graph.status == "fetching"
+    ButtonRow {
+        Segmented(
+            listOf("⬠ " + stringResource(R.string.zone_polygon) to (z.mode == ZoneMode.POLYGON), "◯ " + stringResource(R.string.zone_circle) to (z.mode == ZoneMode.CIRCLE)),
+        ) { i -> engine.setZoneMode(if (i == 0) ZoneMode.POLYGON else ZoneMode.CIRCLE) }
+        if (z.mode == ZoneMode.POLYGON) {
+            IconBtn("↶", stringResource(R.string.undo), enabled = z.vertices.isNotEmpty()) { engine.undoVertex() }
+            IconBtn("✕", stringResource(R.string.clear), enabled = z.vertices.isNotEmpty()) { engine.clearZone() }
+        } else {
+            RadiusField(z.radiusMeters) { engine.setRadius(it) }
+        }
+    }
+    val hasZone = if (z.mode == ZoneMode.POLYGON) z.vertices.size >= 3 else z.circleCenter != null
+    val hard = z.errors.filter { it != "large_zone" }
+    when {
+        !hasZone -> StatusLine(stringResource(if (z.mode == ZoneMode.POLYGON) R.string.tap_to_add_vertex else R.string.tap_to_set_center), mutedColor())
+        z.valid -> {
+            StatusLine(stringResource(R.string.zone_area_line, fmtArea(z.areaSqMeters), fmtMeters(z.perimeterMeters)), Palette.ok)
+            if ("large_zone" in z.errors) Text(zoneErrorText("large_zone"), fontSize = 13.sp, color = Palette.warn)
+        }
+        else -> StatusLine(stringResource(R.string.zone_invalid) + ": " + hard.map { zoneErrorText(it) }.joinToString(" "), MaterialTheme.colorScheme.error)
+    }
+    BigButton(stringResource(if (fetching) R.string.fetching_roads else R.string.fetch_roads), enabled = z.valid && !fetching) { engine.fetchGraph() }
+    if (fetching) {
+        LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(state.graph.progress ?: "", fontSize = 12.sp, color = mutedColor(), modifier = Modifier.weight(1f, fill = false))
+            LinkText(stringResource(R.string.cancel)) { engine.editArea() }
+        }
+    }
+    if (state.graph.status == "failed") {
+        Text(failureText(state.graph.failureCode), color = MaterialTheme.colorScheme.error, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+        state.graph.attempts.takeLast(4).forEach { Text("· $it", fontSize = 12.sp, color = mutedColor()) }
+    }
+    if (!peek) Text(stringResource(R.string.graph_source_note), fontSize = 12.sp, color = mutedColor(), modifier = Modifier.padding(top = 6.dp))
+}
+
+@Composable
+private fun RadiusField(radius: Double, onChange: (Double) -> Unit) {
+    var text by remember(radius) { mutableStateOf(radius.toInt().toString()) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.radius_m), fontSize = 14.sp)
+        Spacer(Modifier.width(6.dp))
+        BasicTextField(
+            value = text, singleLine = true,
+            onValueChange = { t ->
+                text = t.filter { it.isDigit() }.take(5)
+                text.toIntOrNull()?.let { if (it > 0) onChange(it.toDouble()) }
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            textStyle = TextStyle(fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface),
+            modifier = Modifier.width(80.dp).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)).padding(horizontal = 10.dp, vertical = 10.dp),
         )
     }
-    if (showExport) ExportDialog(onDismiss = { showExport = false }, actions = actions)
 }
 
 @Composable
-private fun GpsChip(g: GpsInfo) {
-    val color = when (g.state) {
-        "reliable" -> Color(0xFF2E7D32)
-        "weak", "acquiring" -> Color(0xFFEF6C00)
-        "paused" -> Color(0xFF546E7A)
-        else -> Color(0xFFC62828)
-    }
-    val detail = buildString {
-        g.accuracy?.let { append(String.format(Locale.getDefault(), " ±%.0f m", it)) }
-        g.ageMs?.let { append(String.format(Locale.getDefault(), " · %.1f s", it / 1000.0)) }
-        g.provider?.let { append(" · ").append(it) }
-    }
-    Text(
-        (if (g.simulated) "LAB · " else "GPS · ") + gpsStateText(g.state) + detail,
-        color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold,
-        modifier = Modifier.background(color, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
-    )
-}
-
-/** "You are here" chip + my-location button, shown on the map in every screen. */
-@Composable
-private fun WhereAmI(state: UiState, actions: AppActions, modifier: Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Surface(shape = RoundedCornerShape(28.dp), color = Color(0xFF1E88E5), shadowElevation = 6.dp, modifier = Modifier.clickable { actions.showMyLocation() }) {
-            Text("◎", color = Color.White, fontSize = 28.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+private fun StartStep(state: UiState, engine: Engine, actions: AppActions, picking: Boolean, min: Boolean, onPick: () -> Unit) {
+    val st = state.start
+    if (!min) {
+        ButtonRow {
+            SmallButton("📍 " + stringResource(R.string.tap_for_start), primary = !picking, enabled = !state.plan.computing) {
+                engine.setTapMode(TapMode.START)
+                onPick()
+            }
+            SmallButton("➤ " + stringResource(R.string.use_my_location)) { actions.useGpsForStart() }
         }
-        val me = state.myLocation
-        val text = when {
-            me != null -> stringResource(R.string.you_are_here) + (me.accuracy?.let { String.format(Locale.getDefault(), " · ±%.0f m", it) } ?: "")
-            state.myLocationState == "permission_denied" -> stringResource(R.string.gps_permission_denied)
-            state.myLocationState == "location_disabled" -> stringResource(R.string.gps_location_disabled)
-            else -> stringResource(R.string.locating)
-        }
-        Text(text, color = Color.Black, fontSize = 14.sp, modifier = Modifier.background(Color(0xEEFFFFFF), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp))
     }
-}
-
-/** Big turn-by-turn banner: what to do next, how far, and onto which street. */
-@Composable
-private fun NavBanner(d: DriveInfo) {
-    val n = d.nav
-    val green = Color(0xFF1B5E20)
-    if (n == null || d.status != "active" || d.replanning) {
-        GuidanceCard(d)
-        return
-    }
-    Surface(shape = RoundedCornerShape(16.dp), color = green, shadowElevation = 8.dp) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val glyph = when (n.mode) {
-                    "to_road" -> "➤"
-                    else -> if (n.type == "join") "⤴" else maneuverGlyph(n.type)
-                }
-                val rot = if (n.mode == "to_road") ((n.relativeBearing ?: n.headBearing ?: 0.0) - 90.0).toFloat() else 0f
-                Text(glyph, fontSize = 64.sp, color = Color.White, modifier = Modifier.padding(end = 16.dp).graphicsLayer { rotationZ = rot })
-                Column {
-                    Text(fmtMeters(n.distanceMeters), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    val action = when {
-                        n.mode == "to_road" -> stringResource(R.string.nav_head_to_road)
-                        n.type == "join" -> stringResource(R.string.nav_join_route)
-                        n.type == "turnaround" && n.turnaroundVerified != true -> stringResource(R.string.voice_turnaround_if_safe)
-                        else -> maneuverText(n.type)
-                    }
-                    Text(action, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                    n.roadName?.let { Text(stringResource(R.string.nav_onto, it), fontSize = 20.sp, color = Color(0xFFE8F5E9)) }
+    when {
+        st.error == "no_legal_road_nearby" -> StatusLine(stringResource(R.string.start_no_road), MaterialTheme.colorScheme.error)
+        st.error == "no_graph" -> StatusLine(stringResource(R.string.blocker_no_graph), MaterialTheme.colorScheme.error)
+        st.snappedEdgeId != null -> {
+            StatusLine(stringResource(R.string.start_snapped_short, st.roadName ?: stringResource(R.string.unnamed_road), fmtMeters(st.distanceMeters)))
+            if (!min) {
+                if (!st.inMainComponent) Text(stringResource(R.string.start_not_main), fontSize = 13.sp, color = Palette.warn)
+                ButtonRow {
+                    SmallButton("⇄ " + stringResource(R.string.flip_direction), enabled = st.hasReverse) { engine.reverseStartDirection() }
+                    SmallButton("✓ " + stringResource(R.string.confirm_start), primary = true) { engine.confirmStart(true) }
                 }
             }
-            if (n.mode == "approach") {
-                Text(stringResource(R.string.nav_go_to_route) + " · " + stringResource(R.string.nav_to_route_remaining, fmtMeters(n.rejoinMeters ?: 0.0)), color = Color(0xFFC8E6C9), fontSize = 16.sp)
-            }
-            if (n.thenType != null && n.thenDistanceMeters != null && n.thenDistanceMeters < 400) {
-                Text(
-                    stringResource(R.string.nav_then) + ": " + (if (n.thenType == "join") stringResource(R.string.nav_join_route) else maneuverGlyph(n.thenType) + " " + maneuverText(n.thenType)) + (n.thenRoadName?.let { " · $it" } ?: ""),
-                    color = Color.White, fontSize = 18.sp,
-                    modifier = Modifier.padding(top = 6.dp).background(Color(0x33000000), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
-                )
-            }
-            if (n.approximate) Text(stringResource(R.string.nav_approximate), color = Color(0xFFFFE082), fontSize = 14.sp)
+        }
+        else -> StatusLine(stringResource(R.string.tap_hint_start), mutedColor())
+    }
+}
+
+@Composable
+private fun RouteStep(state: UiState, engine: Engine, min: Boolean) {
+    val p = state.plan
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        StatusLine(stringResource(R.string.start_at, state.start.roadName ?: "—"))
+        if (!min) LinkText(stringResource(R.string.change)) { engine.confirmStart(false) }
+    }
+    if (min) return
+    ButtonRow {
+        Segmented(
+            listOf(stringResource(R.string.policy_strict_short) to (p.policy == "STRICT_INSIDE"), stringResource(R.string.policy_allow_short) to (p.policy == "ALLOW_NECESSARY_CONNECTORS")),
+            enabled = !p.computing,
+        ) { i -> engine.setPolicy(if (i == 0) "STRICT_INSIDE" else "ALLOW_NECESSARY_CONNECTORS") }
+    }
+    CheckRow(state.returnToStart, stringResource(R.string.return_to_start), enabled = !p.computing) { engine.setReturnToStart(it) }
+    ButtonRow {
+        val has = p.status != null
+        SmallButton(
+            stringResource(if (p.computing) R.string.planning else if (has) R.string.replan else R.string.plan_route),
+            primary = !has, enabled = !p.computing,
+        ) { engine.previewPlan() }
+        if (p.computing) SmallButton(stringResource(R.string.cancel)) { engine.cancelPlan() }
+    }
+    if (p.computing) LinearProgressIndicator(Modifier.fillMaxWidth().padding(vertical = 4.dp))
+    if (p.status != null && !p.computing) PlanCard(p, state.outsideApproved) { engine.setOutsideApproved(it) }
+    Expander(stringResource(R.string.safety_title)) {
+        Text(stringResource(R.string.safety_note), fontSize = 12.sp, color = mutedColor())
+        Text(stringResource(R.string.guidance_signs), fontSize = 12.sp, color = mutedColor())
+    }
+}
+
+@Composable
+private fun PlanCard(p: PlanInfo, approved: Boolean, onApprove: (Boolean) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(surface2(), RoundedCornerShape(14.dp)).padding(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Kpi(fmtMeters(p.totalMeters), stringResource(R.string.total_distance))
+            Kpi(fmtMeters(p.newCoverageMeters), stringResource(R.string.new_coverage))
+            Kpi(fmtMeters(p.repeatMeters), stringResource(R.string.repeats))
+            if (p.outsideMeters > 2) Kpi(fmtMeters(p.outsideMeters), stringResource(R.string.outside_zone), Palette.warn)
+        }
+        val unplanned = p.unreachableByCause.values.sum()
+        Text(
+            buildString {
+                append(planStatusText(p.status)).append(" · ").append(if (p.valid) "✓" else "✗")
+            } + (if (unplanned > 0) " · " + stringResource(R.string.unreachable_short) + ": " + fmtInt(unplanned) else "") +
+                (if (p.unverifiedTurnarounds > 0) " · " + stringResource(R.string.unverified_turnarounds) + ": " + fmtInt(p.unverifiedTurnarounds) else ""),
+            fontSize = 13.sp, color = if (p.valid) Palette.ok else MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp),
+        )
+        Expander(stringResource(R.string.details)) {
+            val causes = p.unreachableByCause.entries.map { (c, n) -> causeText(c) + " " + fmtInt(n) }
+            Text(causes.joinToString(" · ").ifEmpty { "—" }, fontSize = 12.sp, color = mutedColor())
+            Text(stringResource(R.string.plan_note, p.millis, p.iterations), fontSize = 12.sp, color = mutedColor())
+            if (p.unverifiedTurnarounds > 0) Text(stringResource(R.string.plan_unverified_turnarounds, p.unverifiedTurnarounds), fontSize = 12.sp, color = Palette.warn)
+            p.errors.forEach { Text("✗ $it", color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
+        }
+        if (p.outsideMeters > 2) {
+            CheckRow(approved, stringResource(R.string.approve_outside, fmtMeters(p.outsideMeters)), color = Palette.warn) { onApprove(it) }
         }
     }
 }
 
 @Composable
-private fun GuidanceCard(d: DriveInfo) {
-    val mv = d.maneuver
-    Surface(shape = RoundedCornerShape(12.dp), tonalElevation = 6.dp, shadowElevation = 6.dp) {
-        Column(Modifier.padding(12.dp)) {
-            when {
-                d.status == "paused" -> Text(stringResource(R.string.guidance_paused), fontSize = 20.sp)
-                d.status == "ended" -> Text(stringResource(R.string.guidance_ended), fontSize = 20.sp)
-                d.replanning -> Text(stringResource(R.string.guidance_replanning), fontSize = 20.sp)
-                d.noContinuation -> Text(stringResource(R.string.guidance_no_continuation), fontSize = 18.sp, color = MaterialTheme.colorScheme.error)
-                mv != null -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(maneuverGlyph(mv.type), fontSize = 44.sp, modifier = Modifier.padding(end = 12.dp))
-                        Column {
-                            Text(fmtMeters(mv.distanceMeters), fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                            Text(maneuverText(mv.type) + (mv.roadName?.let { " · $it" } ?: ""), fontSize = 18.sp)
-                        }
-                    }
-                    if (mv.type == "turnaround" && mv.turnaroundVerified != true) {
-                        Text(stringResource(R.string.turnaround_only_if_safe), color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
-                    }
-                }
-                d.gps.state != "reliable" -> Text(stringResource(R.string.guidance_wait_gps), fontSize = 18.sp)
-                d.guidanceEvent == "off_route_pending" -> Text(stringResource(R.string.guidance_off_route), fontSize = 18.sp)
-                d.guidanceEvent == "finished" -> Text(stringResource(R.string.guidance_finished), fontSize = 18.sp)
-                else -> Text(stringResource(R.string.guidance_follow_route), fontSize = 18.sp)
-            }
-            Text(stringResource(R.string.guidance_signs), fontSize = 12.sp)
-        }
+private fun RowScope.Kpi(value: String, label: String, color: Color? = null) {
+    Column(Modifier.weight(1f)) {
+        Text(value, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = color ?: MaterialTheme.colorScheme.onSurface, maxLines = 1)
+        Text(label, fontSize = 12.sp, color = mutedColor(), maxLines = 2)
     }
 }
 
 // ------------------------------------------------------------------ dialogs
-
-@Composable
-private fun RecoveryDialog(r: RecoveryOffer, engine: Engine) {
-    val df = remember { java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT) }
-    AlertDialog(
-        onDismissRequest = { engine.dismissRecovery() },
-        title = { Text(stringResource(R.string.recovery_title)) },
-        text = {
-            Text(stringResource(R.string.recovery_text, df.format(java.util.Date(r.createdAt)), df.format(java.util.Date(r.updatedAt))) + if (r.lab) "\n" + stringResource(R.string.lab_banner) else "")
-        },
-        confirmButton = { TextButton(onClick = { engine.resumeRecovered() }) { Text(stringResource(R.string.recovery_resume)) } },
-        dismissButton = {
-            Row {
-                TextButton(onClick = { engine.endRecovered() }) { Text(stringResource(R.string.recovery_end)) }
-                TextButton(onClick = { engine.dismissRecovery() }) { Text(stringResource(R.string.later)) }
-            }
-        },
-    )
-}
-
-@Composable
-private fun ConnectorDialog(o: ConnectorOffer, engine: Engine) {
-    AlertDialog(
-        onDismissRequest = { engine.dismissConnectors() },
-        title = { Text(stringResource(R.string.connectors_title)) },
-        text = { Text(stringResource(R.string.connectors_text, fmtMeters(o.outsideMeters), fmtMeters(o.totalMeters), o.coveredCount)) },
-        confirmButton = { TextButton(onClick = { engine.confirmConnectors() }) { Text(stringResource(R.string.connectors_accept)) } },
-        dismissButton = { TextButton(onClick = { engine.dismissConnectors() }) { Text(stringResource(R.string.cancel)) } },
-    )
-}
 
 @Composable
 private fun OutsideApprovalDialog(o: OutsideApproval, engine: Engine) {
@@ -680,7 +894,7 @@ private fun OutsideApprovalDialog(o: OutsideApproval, engine: Engine) {
 }
 
 @Composable
-private fun ExportDialog(onDismiss: () -> Unit, actions: AppActions) {
+internal fun ExportDialog(onDismiss: () -> Unit, actions: AppActions) {
     var obs by remember { mutableStateOf(false) }
     var graph by remember { mutableStateOf(true) }
     AlertDialog(
@@ -688,135 +902,12 @@ private fun ExportDialog(onDismiss: () -> Unit, actions: AppActions) {
         title = { Text(stringResource(R.string.export_title)) },
         text = {
             Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = obs, onCheckedChange = { obs = it })
-                    Text(stringResource(R.string.export_observations))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = graph, onCheckedChange = { graph = it })
-                    Text(stringResource(R.string.export_graph))
-                }
+                CheckRow(obs, stringResource(R.string.export_observations)) { obs = it }
+                CheckRow(graph, stringResource(R.string.export_graph)) { graph = it }
                 Text(stringResource(R.string.export_privacy), fontSize = 12.sp)
             }
         },
         confirmButton = { TextButton(onClick = { onDismiss(); actions.export(obs, graph) }) { Text(stringResource(R.string.export)) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
-}
-
-// ------------------------------------------------------------------ diagnostics / settings
-
-@Composable
-fun DiagnosticsScreen(state: UiState, engine: Engine, actions: AppActions) {
-    var confirmDelete by remember { mutableStateOf(false) }
-    var showExport by remember { mutableStateOf(false) }
-    val g = state.graph
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.diagnostics), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            BigButton(stringResource(R.string.back)) { engine.setScreen(if (state.drive.sessionId != null) Screen.DRIVE else Screen.PREPARE) }
-        }
-        Section(stringResource(R.string.diag_provenance)) {
-            Text(stringResource(R.string.diag_provider_line, g.providerId ?: "—", g.dataState))
-            Text("graphId: ${g.graphId ?: "—"}")
-            Text("contentHash: ${g.contentHash ?: "—"}", fontSize = 12.sp)
-            Text(stringResource(R.string.diag_source_version, g.sourceVersion ?: "—"))
-            Text(stringResource(R.string.diag_fetched, g.fetchedAt ?: "—", g.endpoint ?: "—"))
-            Text(stringResource(R.string.graph_ok, g.edgeCount, g.nodeCount, g.restrictionCount))
-            Text(stringResource(R.string.diag_eligibility, g.eligibleEdges, g.excludedEdges, g.needsReviewEdges))
-            g.exclusionReasons.entries.sortedByDescending { it.value }.take(10).forEach { Text("· ${it.key}: ${it.value}", fontSize = 12.sp) }
-            g.attempts.forEach { Text("↳ $it", fontSize = 12.sp) }
-        }
-        Section(stringResource(R.string.diag_completeness)) {
-            if (g.notes.isEmpty()) Text("—")
-            g.notes.forEach { Text("• $it", fontSize = 13.sp) }
-            Text(stringResource(R.string.diag_data_caveat), fontSize = 13.sp)
-        }
-        Section(stringResource(R.string.diag_attribution)) {
-            Text(stringResource(R.string.osm_attribution))
-            Text(stringResource(R.string.diag_services), fontSize = 13.sp)
-        }
-        Section(stringResource(R.string.diag_gps)) {
-            val gp = state.drive.gps
-            Text("${gpsStateText(gp.state)} · ${gp.provider ?: "—"} · ${gp.accuracy?.let { String.format(Locale.getDefault(), "±%.0f m", it) } ?: "—"} · ${gp.ageMs?.let { "${it / 1000.0} s" } ?: "—"}")
-            Text(stringResource(R.string.diag_gps_note), fontSize = 13.sp)
-        }
-        Section(stringResource(R.string.diag_session)) {
-            val d = state.drive
-            Text("session: ${d.sessionId ?: "—"} · ${d.status}")
-            Text(stringResource(R.string.diag_session_line, d.traversals, d.gaps, d.planRevision, planStatusText(d.planStatus)))
-            Text(engine.diagnosticsSummary(), fontSize = 12.sp)
-        }
-        Section(stringResource(R.string.diag_data)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SmallButton(stringResource(R.string.export), enabled = state.drive.sessionId != null && state.drive.status != "active") { showExport = true }
-                SmallButton(stringResource(R.string.import_session), enabled = state.drive.sessionId == null) { actions.import() }
-            }
-            SmallButton(stringResource(R.string.delete_all), enabled = state.drive.status != "active") { confirmDelete = true }
-        }
-        if (BuildConfig.DEBUG) {
-            Section(stringResource(R.string.lab_section)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = state.labMode, enabled = state.drive.sessionId == null, onCheckedChange = { engine.setLabMode(it) })
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.lab_banner))
-                }
-                Text(stringResource(R.string.lab_note), fontSize = 12.sp)
-            }
-        }
-    }
-    if (confirmDelete) {
-        AlertDialog(
-            onDismissRequest = { confirmDelete = false },
-            title = { Text(stringResource(R.string.delete_all)) },
-            text = { Text(stringResource(R.string.delete_confirm_text)) },
-            confirmButton = { TextButton(onClick = { confirmDelete = false; engine.deleteAllData() }) { Text(stringResource(R.string.delete_all)) } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.cancel)) } },
-        )
-    }
-    if (showExport) ExportDialog(onDismiss = { showExport = false }, actions = actions)
-}
-
-@Composable
-fun SettingsScreen(engine: Engine, actions: AppActions) {
-    val context = LocalContext.current
-    val lang = Localized.language(context)
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.settings), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            BigButton(stringResource(R.string.back)) { engine.setScreen(Screen.PREPARE) }
-        }
-        Section(stringResource(R.string.language)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { actions.setLanguage("fa") }.padding(vertical = 8.dp)) {
-                RadioButton(selected = lang == "fa", onClick = { actions.setLanguage("fa") })
-                Text("فارسی", fontSize = 18.sp)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { actions.setLanguage("en") }.padding(vertical = 8.dp)) {
-                RadioButton(selected = lang == "en", onClick = { actions.setLanguage("en") })
-                Text("English", fontSize = 18.sp)
-            }
-        }
-        Section(stringResource(R.string.legend)) {
-            LegendRow(Color(0xFFD32F2F), stringResource(R.string.legend_unvisited))
-            LegendRow(Color(0xFFF9A825), stringResource(R.string.legend_partial))
-            LegendRow(Color(0xFF2E7D32), stringResource(R.string.legend_covered))
-            LegendRow(Color(0xFF4E342E), stringResource(R.string.legend_blocked))
-            LegendRow(Color(0xFF757575), stringResource(R.string.legend_unreachable))
-            LegendRow(Color(0xFF8E24AA), stringResource(R.string.legend_needs_review))
-            LegendRow(Color(0x803949AB), stringResource(R.string.legend_plan))
-            LegendRow(Color(0x80EF6C00), stringResource(R.string.legend_outside))
-            LegendRow(Color(0xFF1E88E5), stringResource(R.string.legend_location))
-            Text(stringResource(R.string.legend_direction), fontSize = 13.sp)
-        }
-        Text(stringResource(R.string.about_text), fontSize = 13.sp)
-    }
-}
-
-@Composable
-private fun LegendRow(c: Color, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 3.dp)) {
-        Box(Modifier.width(36.dp).height(8.dp).background(c, RoundedCornerShape(4.dp)))
-        Spacer(Modifier.width(10.dp))
-        Text(label)
-    }
 }

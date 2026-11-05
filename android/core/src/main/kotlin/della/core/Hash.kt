@@ -56,7 +56,10 @@ fun canonicalHashDocument(g: GraphSnapshot): JsonObject {
                 "eligibility" to JsonPrimitive(e.eligibility),
                 "eligibilityReason" to str(e.eligibilityReason),
                 "dataConfidence" to JsonPrimitive(e.dataConfidence),
-            ),
+            ).apply {
+                // Additive (contract fixture revision 4): only present when mapped, so older hashes stay valid.
+                e.turnLanes?.let { put("turnLanes", JsonArray(it.map { l -> JsonArray(l.map { x -> JsonPrimitive(x) }) })) }
+            },
         )
     }
     val restrictions = g.turnRestrictions.sortedWith { a, b -> a.restrictionId.compareTo(b.restrictionId) }.map { r ->

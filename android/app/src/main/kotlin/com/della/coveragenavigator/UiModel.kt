@@ -4,7 +4,7 @@ package com.della.coveragenavigator
 import della.core.CoverageMetrics
 import della.core.LonLat
 
-enum class Screen { PREPARE, DRIVE, DIAGNOSTICS, SETTINGS }
+enum class Screen { PREPARE, DRIVE, DIAGNOSTICS, SETTINGS, SESSIONS }
 enum class ZoneMode { POLYGON, CIRCLE }
 enum class TapMode { ZONE, START }
 
@@ -92,8 +92,6 @@ data class PlanInfo(
     val millis: Long = 0,
 )
 
-data class ConnectorOffer(val outsideMeters: Double, val totalMeters: Double, val coveredCount: Int, val status: String)
-
 data class GpsInfo(
     val state: String = "acquiring", // acquiring|reliable|weak|stale|permission_denied|location_disabled|paused|no_provider
     val accuracy: Double? = null,
@@ -160,7 +158,10 @@ data class UiState(
     val counts: RequirementCounts = RequirementCounts(),
     val start: StartInfo = StartInfo(),
     val plan: PlanInfo = PlanInfo(),
-    val connectorOffer: ConnectorOffer? = null,
+    /** Plan round trip back to the start (web "return to start"). */
+    val returnToStart: Boolean = false,
+    /** User ticked "approve outside travel" for the current preview plan. */
+    val outsideApproved: Boolean = false,
     val outsideApproval: OutsideApproval? = null,
     val drive: DriveInfo = DriveInfo(),
     val layers: MapLayers = MapLayers(),

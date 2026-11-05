@@ -224,6 +224,25 @@ fun wayDirections(tags: Map<String, String>): Pair<Boolean, Boolean> {
     return true to true
 }
 
+private val LANE_VALUES = setOf("left", "slight_left", "sharp_left", "through", "right", "slight_right", "sharp_right", "reverse", "merge_to_left", "merge_to_right", "none")
+
+/**
+ * Lane turn indications for one travel direction (left to right as seen by the driver).
+ * `turn:lanes` applies to the only legal direction of a one-way road; two-way roads use
+ * `turn:lanes:forward` / `turn:lanes:backward`. Unknown values become "none".
+ */
+fun parseTurnLanes(tags: Map<String, String>, dir: String, onewayForward: Boolean, onewayBackward: Boolean): List<List<String>>? {
+    var v = tags["turn:lanes:$dir"]
+    if (v == null && ((dir == "forward" && onewayForward) || (dir == "backward" && onewayBackward))) v = tags["turn:lanes"]
+    if (v == null || v.trim().isEmpty()) return null
+    val lanes = v.split("|").map { l ->
+        val parts = l.split(";").map { it.trim() }.filter { it.isNotEmpty() }
+        val ok = parts.map { if (it in LANE_VALUES) it else "none" }
+        ok.ifEmpty { listOf("none") }
+    }
+    return if (lanes.size in 1..12) lanes else null
+}
+
 private fun nodePassage(tags: Map<String, String>?): Pair<String, String?> {
     if (tags == null || tags["barrier"] == null) return "free" to null
     val b = tags["barrier"]!!
@@ -388,6 +407,8 @@ fun normalizeOverpass(resp: OverpassResponse, opts: NormalizeOptions): GraphSnap
             val endBarriers = listOf(nodeById[a]?.barrier, nodeById[b]?.barrier).filter { truthy(it) }.map { it!! }
             val fId = "${seg.physicalSegmentId}:f"
             val bId = "${seg.physicalSegmentId}:b"
+            val lanesF = parseTurnLanes(tags, "forward", fwd && !bwd, bwd && !fwd)
+            val lanesB = parseTurnLanes(tags, "backward", fwd && !bwd, bwd && !fwd)
             fun mk(edgeId: String, from: String, to: String, geometry: List<LonLat>, dir: String, recip: String?) = DirectedEdge(
                 edgeId = edgeId,
                 physicalSegmentId = seg.physicalSegmentId,
@@ -410,6 +431,7 @@ fun normalizeOverpass(resp: OverpassResponse, opts: NormalizeOptions): GraphSnap
                 eligibilityReason = cls.reason,
                 dataConfidence = cls.confidence,
                 provenance = "osm way/${w.id}",
+                turnLanes = if (dir == "forward") lanesF else lanesB,
             )
             if (fwd) edges.add(mk(fId, a, b, geomF, "forward", if (bwd) bId else null))
             if (bwd) edges.add(mk(bId, b, a, geomF.reversed(), "backward", if (fwd) fId else null))

@@ -147,6 +147,10 @@ fun checkAssertion(a: JsonObject, out: JsonObject) {
                 assertEquals(a.str("reason"), ((graph["eligibilityReason"] as JsonObject)[a.str("edgeId")] as JsonPrimitive).content, msg)
             }
         }
+        "turn_lanes" -> assertEquals(
+            (a["value"] as? JsonPrimitive)?.takeIf { it.isString }?.content,
+            ((graph["turnLanes"] as JsonObject)[a.str("edgeId")] as? JsonPrimitive)?.content, msg,
+        )
         "node_passage" -> assertEquals(a.str("value"), ((graph["nodePassage"] as JsonObject)[a.str("nodeId")] as? JsonPrimitive)?.content, msg)
         else -> throw AssertionError("unknown assertion $kind")
     }

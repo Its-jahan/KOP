@@ -1,7 +1,7 @@
 # Coverage Navigator – Android
 
 Native Kotlin app (Jetpack Compose + MapLibre Native) for the BYD Qin Plus head unit,
-implementing the frozen shared contract in `../contract` (fixture revision 3, planner 1.1.0,
+implementing the frozen shared contract in `../contract` (fixture revision 4 — additive `turnLanes`, planner 1.1.0,
 `osm-normalizer-1.1.0`, `seq-matcher-1.1.0`).
 
 Status: installable debug build. **Not field-verified**: no emulator or device was available,
@@ -11,8 +11,8 @@ so nothing here has run on Android hardware, real GPS, or the BYD head unit.
 | Path | Contents |
 |---|---|
 | `core/` | Pure Kotlin/JVM port of `web/src/core` (no Android deps): OSM normaliser, JCS + SHA-256 graph hash, zone clipping, requirements, legal-transition automaton, planner (`legalShortestPath`, `edgeScc`), validator, matcher, guidance, session reducer, `decidePlan`, recovery, failure states, export/import (+ a minimal JSON-Schema validator over the contract schema, packaged from `../contract/schema`). |
-| `core/src/test` | `ConformanceTest` (F01–F21 + JCS vectors, same comparisons as `web/tests/unit/conformance.test.ts`), `InvariantsTest` (random graphs, intervals, replay, zones), `PortableCrossPlatformTest` (Android-built F17 export, web package import/re-export), optional `RealDataSmokeTest` (`-PrealOsm=<overpass.json>`). |
-| `app/` | Android UI and adapters: Overpass graph fetch (3 endpoints, retries, rejects truncated `remark` replies), Nominatim search (map positioning only), OSM raster tiles with a real User-Agent, SQLite event log + checkpoints, location foreground service (platform `LocationManager`, no Google Play Services), SAF export/import, fa (RTL, default) / en UI. |
+| `core/src/test` | `ConformanceTest` (F01–F22 + JCS vectors, same comparisons as `web/tests/unit/conformance.test.ts`), `InvariantsTest` (random graphs, intervals, replay, zones), `PortableCrossPlatformTest` (Android-built F17 export, web package import/re-export), optional `RealDataSmokeTest` (`-PrealOsm=<overpass.json>`). |
+| `app/` | Android UI and adapters: Overpass graph fetch (3 endpoints, retries, rejects truncated `remark` replies), Nominatim search (map positioning only), OSM raster tiles with a real User-Agent, SQLite event log + checkpoints, location foreground service (platform `LocationManager`, no Google Play Services), SAF export/import, fa (RTL, default) / en UI. Map-first layout mirroring the web: full-screen map with floating controls, 3-step preparation sheet (Area → Start → Route; side panel on wide landscape screens), menu drawer, driving HUD with maneuver card and lane guidance (OSM `turn:lanes`). |
 
 ## Build
 ```

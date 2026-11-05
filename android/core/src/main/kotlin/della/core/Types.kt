@@ -73,6 +73,8 @@ data class DirectedEdge(
     /** high | medium | low */
     val dataConfidence: String,
     val provenance: String,
+    /** Lane turn indications in travel direction, left to right (OSM turn:lanes); null if unmapped. */
+    val turnLanes: List<List<String>>? = null,
 )
 
 data class TurnRestriction(
