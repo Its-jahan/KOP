@@ -49,6 +49,7 @@ export async function runFixture(input: FixtureInput) {
     edgeIds: g.directedEdges.map((e) => e.edgeId),
     eligibility: Object.fromEntries(g.directedEdges.map((e) => [e.edgeId, e.eligibility])),
     eligibilityReason: Object.fromEntries(g.directedEdges.filter((e) => e.eligibilityReason).map((e) => [e.edgeId, e.eligibilityReason])),
+    turnLanes: Object.fromEntries(g.directedEdges.filter((e) => e.turnLanes).map((e) => [e.edgeId, e.turnLanes!.map((l) => l.join(';')).join('|')])),
     nodePassage: Object.fromEntries(g.nodes.filter((n) => n.passage !== 'free').map((n) => [n.nodeId, n.passage])),
     restrictions: g.turnRestrictions.map((r) => ({ id: r.restrictionId, kind: r.kind, from: r.fromEdgeId, via: r.viaNodeId ?? r.viaEdgeIds, to: r.toEdgeId })),
   };

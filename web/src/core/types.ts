@@ -97,6 +97,8 @@ export interface DirectedEdge {
   eligibilityReason: string | null;
   dataConfidence: 'high' | 'medium' | 'low';
   provenance: string;
+  /** Lane turn indications in travel direction, left to right (OSM turn:lanes); absent if unmapped. */
+  turnLanes?: string[][];
 }
 
 export interface TurnRestriction {

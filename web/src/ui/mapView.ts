@@ -8,13 +8,29 @@ import type { LonLat } from '../core/types';
 type FC = GeoJSON.FeatureCollection;
 const empty = (): FC => ({ type: 'FeatureCollection', features: [] });
 
+/** Shared palette (keep in sync with the CSS tokens in styles.css). */
+export const PALETTE = {
+  todo: '#ff5a1f',
+  done: '#12a150',
+  partial: '#f4b400',
+  blocked: '#6b7280',
+  unreach: '#8e5cc4',
+  review: '#a0785a',
+  route: '#1a73e8',
+  routeCasing: '#0b3d91',
+  plan: '#1a73e8',
+  outside: '#c2185b',
+  zone: '#1a73e8',
+  me: '#1a73e8',
+};
+
 export const STATUS_COLORS: Record<string, string> = {
-  unvisited: '#d6336c',
-  partial: '#f08c00',
-  covered: '#2b8a3e',
-  blocked: '#495057',
-  unreachable: '#7048e8',
-  needsReview: '#e8b600',
+  unvisited: PALETTE.todo,
+  partial: PALETTE.partial,
+  covered: PALETTE.done,
+  blocked: PALETTE.blocked,
+  unreachable: PALETTE.unreach,
+  needsReview: PALETTE.review,
 };
 
 export class MapView {
@@ -45,11 +61,11 @@ export class MapView {
       center,
       zoom,
       attributionControl: { compact: true },
+      fadeDuration: 0,
       dragRotate: false,
       pitchWithRotate: false,
     });
     this.map.touchZoomRotate.disableRotation();
-    this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     this.map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     this.map.on('click', (e) => this.clickHandler?.([e.lngLat.lng, e.lngLat.lat]));
     this.map.on('dragstart', () => this.userPanHandler?.());
@@ -99,7 +115,9 @@ export class MapView {
     for (const id of ['reqs-line', 'reqs-line-dashed', 'covered-line']) m.setPaintProperty(id, 'line-opacity', driving ? 0.45 : 1);
     m.setLayoutProperty('reqs-arrows', 'visibility', driving ? 'none' : 'visible');
     m.setPaintProperty('route-line', 'line-opacity', driving ? 0.15 : 0.35);
-    if (!driving) this.map.easeTo({ pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 400 });
+    if (!driving && (this.map.getPitch() !== 0 || this.map.getBearing() !== 0)) {
+      this.map.easeTo({ pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 400 });
+    }
   }
 
   private setup() {
@@ -134,7 +152,7 @@ export class MapView {
     v.lineTo(vs * 0.5, vs * 0.7);
     v.lineTo(vs * 0.12, vs * 0.9);
     v.closePath();
-    v.fillStyle = '#1e88e5';
+    v.fillStyle = PALETTE.me;
     v.fill();
     v.lineWidth = 5;
     v.strokeStyle = '#ffffff';
@@ -142,14 +160,14 @@ export class MapView {
     m.addImage('vehicle', v.getImageData(0, 0, vs, vs), { pixelRatio: 2 });
 
     for (const id of ['zone', 'reqs', 'covered', 'route', 'pos', 'trail', 'ahead']) m.addSource(id, { type: 'geojson', data: empty() });
-    m.addLayer({ id: 'zone-fill', type: 'fill', source: 'zone', paint: { 'fill-color': '#1c7ed6', 'fill-opacity': 0.08 } });
-    m.addLayer({ id: 'zone-line', type: 'line', source: 'zone', paint: { 'line-color': '#1c7ed6', 'line-width': 2, 'line-dasharray': [2, 1] } });
+    m.addLayer({ id: 'zone-fill', type: 'fill', source: 'zone', paint: { 'fill-color': PALETTE.zone, 'fill-opacity': 0.06 } });
+    m.addLayer({ id: 'zone-line', type: 'line', source: 'zone', paint: { 'line-color': PALETTE.zone, 'line-width': 2.5, 'line-dasharray': [3, 2] } });
     const offset: maplibregl.ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 13, 1, 16, 3, 19, 7];
     const width: maplibregl.ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 13, 1.5, 16, 3, 19, 6];
     m.addLayer({
       id: 'route-line', type: 'line', source: 'route',
       paint: {
-        'line-color': ['match', ['get', 'kind'], 'outside', '#ae3ec9', 'approach', '#ae3ec9', '#1971c2'],
+        'line-color': ['match', ['get', 'kind'], 'outside', PALETTE.outside, 'approach', PALETTE.outside, PALETTE.plan],
         'line-width': ['interpolate', ['linear'], ['zoom'], 13, 4, 18, 12],
         'line-opacity': 0.35,
       },
@@ -166,7 +184,7 @@ export class MapView {
     });
     m.addLayer({
       id: 'covered-line', type: 'line', source: 'covered',
-      paint: { 'line-color': STATUS_COLORS.covered, 'line-width': width, 'line-offset': offset },
+      paint: { 'line-color': PALETTE.done, 'line-width': width, 'line-offset': offset },
     });
     m.addLayer({
       id: 'reqs-arrows', type: 'symbol', source: 'reqs', minzoom: 15.5,
@@ -176,13 +194,13 @@ export class MapView {
       },
     });
     m.addLayer({ id: 'trail', type: 'line', source: 'trail', paint: { 'line-color': '#212529', 'line-width': 1, 'line-opacity': 0.5 } });
-    m.addLayer({ id: 'ahead-casing', type: 'line', source: 'ahead', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#0d47a1', 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 7, 18, 20] } });
-    m.addLayer({ id: 'ahead-line', type: 'line', source: 'ahead', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#42a5f5', 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 4, 18, 14] } });
+    m.addLayer({ id: 'ahead-casing', type: 'line', source: 'ahead', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': PALETTE.routeCasing, 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 8, 18, 22] } });
+    m.addLayer({ id: 'ahead-line', type: 'line', source: 'ahead', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': PALETTE.route, 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 5, 18, 16] } });
     m.addLayer({
       id: 'ahead-arrows', type: 'symbol', source: 'ahead',
       layout: { 'symbol-placement': 'line', 'symbol-spacing': 80, 'icon-image': 'arrow', 'icon-size': 1.1, 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map' },
     });
-    m.addLayer({ id: 'pos-acc', type: 'fill', source: 'pos', filter: ['==', ['get', 'kind'], 'accuracy'], paint: { 'fill-color': '#1c7ed6', 'fill-opacity': 0.15 } });
+    m.addLayer({ id: 'pos-acc', type: 'fill', source: 'pos', filter: ['==', ['get', 'kind'], 'accuracy'], paint: { 'fill-color': PALETTE.me, 'fill-opacity': 0.12 } });
     m.addLayer({
       id: 'pos-heading', type: 'symbol', source: 'pos', filter: ['all', ['==', ['get', 'kind'], 'dot'], ['>=', ['get', 'heading'], 0]],
       layout: { 'icon-image': 'vehicle', 'icon-size': 1, 'icon-rotate': ['get', 'heading'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true },
@@ -191,7 +209,7 @@ export class MapView {
       id: 'pos-dot', type: 'circle', source: 'pos', filter: ['all', ['==', ['get', 'kind'], 'dot'], ['<', ['get', 'heading'], 0]],
       paint: {
         'circle-radius': 8,
-        'circle-color': ['match', ['get', 'quality'], 'reliable', '#1c7ed6', '#868e96'],
+        'circle-color': ['match', ['get', 'quality'], 'reliable', PALETTE.me, '#f59f00'],
         'circle-stroke-color': '#fff', 'circle-stroke-width': 3,
       },
     });

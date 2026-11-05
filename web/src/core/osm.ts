@@ -171,6 +171,25 @@ export function wayDirections(tags: Record<string, string>): [boolean, boolean] 
   return [true, true];
 }
 
+const LANE_VALUES = new Set(['left', 'slight_left', 'sharp_left', 'through', 'right', 'slight_right', 'sharp_right', 'reverse', 'merge_to_left', 'merge_to_right', 'none']);
+
+/**
+ * Lane turn indications for one travel direction (left to right as seen by the driver).
+ * `turn:lanes` applies to the only legal direction of a one-way road; two-way roads use
+ * `turn:lanes:forward` / `turn:lanes:backward`. Unknown values become 'none'.
+ */
+export function parseTurnLanes(tags: Record<string, string>, dir: 'forward' | 'backward', onewayForward: boolean, onewayBackward: boolean): string[][] | null {
+  let v = tags[`turn:lanes:${dir}`];
+  if (v === undefined && ((dir === 'forward' && onewayForward) || (dir === 'backward' && onewayBackward))) v = tags['turn:lanes'];
+  if (v === undefined || v.trim() === '') return null;
+  const lanes = v.split('|').map((l) => {
+    const parts = l.split(';').map((x) => x.trim()).filter((x) => x !== '');
+    const ok = parts.map((x) => (LANE_VALUES.has(x) ? x : 'none'));
+    return ok.length ? ok : ['none'];
+  });
+  return lanes.length >= 1 && lanes.length <= 12 ? lanes : null;
+}
+
 function nodePassage(tags: Record<string, string> | undefined): { passage: NodePassage; barrier: string | null } {
   if (!tags || tags.barrier === undefined) return { passage: 'free', barrier: null };
   const b = tags.barrier;
@@ -352,15 +371,17 @@ export async function normalizeOverpass(resp: OverpassResponse, opts: NormalizeO
       };
       const fId = `${seg.physicalSegmentId}:f`;
       const bId = `${seg.physicalSegmentId}:b`;
+      const lanesF = parseTurnLanes(tags, 'forward', fwd && !bwd, bwd && !fwd);
+      const lanesB = parseTurnLanes(tags, 'backward', fwd && !bwd, bwd && !fwd);
       if (fwd) {
         edges.push({
-          ...base, edgeId: fId, fromNodeId: a, toNodeId: b, geometry: geomF,
+          ...base, ...(lanesF ? { turnLanes: lanesF } : {}), edgeId: fId, fromNodeId: a, toNodeId: b, geometry: geomF,
           directionIdentity: 'forward', reciprocalEdgeId: bwd ? bId : null,
         });
       }
       if (bwd) {
         edges.push({
-          ...base, edgeId: bId, fromNodeId: b, toNodeId: a, geometry: geomF.slice().reverse(),
+          ...base, ...(lanesB ? { turnLanes: lanesB } : {}), edgeId: bId, fromNodeId: b, toNodeId: a, geometry: geomF.slice().reverse(),
           directionIdentity: 'backward', reciprocalEdgeId: fwd ? fId : null,
         });
       }

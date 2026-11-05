@@ -29,6 +29,51 @@ export interface NavInstruction {
   ahead: LonLat[][];
   /** Stable key of the upcoming maneuver (voice de-duplication). */
   key: string;
+  /** Lane guidance for the next maneuver (left to right), when lanes are mapped. */
+  lanes: LaneHint[] | null;
+}
+
+export interface LaneHint {
+  turns: string[];
+  /** This lane can be used for the next maneuver. */
+  ok: boolean;
+}
+
+const RIGHT = ['right', 'slight_right', 'sharp_right'];
+const LEFT = ['left', 'slight_left', 'sharp_left'];
+
+/**
+ * Which lanes serve a maneuver. Exact family first (slight_right: slight_right/right), then a
+ * conservative fallback for slight turns (through). Unknown match → null (never guess).
+ */
+export function laneHints(lanes: string[][] | undefined, maneuver: string): LaneHint[] | null {
+  if (!lanes || lanes.length < 2) return null;
+  let wanted: string[][];
+  if (maneuver === 'continue') wanted = [['through', 'none']];
+  else if (maneuver === 'right' || maneuver === 'sharp_right') wanted = [RIGHT];
+  else if (maneuver === 'slight_right') wanted = [['slight_right', 'right'], ['through']];
+  else if (maneuver === 'left' || maneuver === 'sharp_left') wanted = [LEFT];
+  else if (maneuver === 'slight_left') wanted = [['slight_left', 'left'], ['through']];
+  else if (maneuver === 'turnaround') wanted = [['reverse']];
+  else return null;
+  for (const w of wanted) {
+    const hints = lanes.map((t) => ({ turns: t, ok: t.some((x) => w.includes(x)) }));
+    if (hints.some((h) => h.ok) && hints.some((h) => !h.ok)) return hints;
+    if (hints.every((h) => h.ok)) return null; // every lane works: nothing to advise
+  }
+  return null;
+}
+
+/** Lanes of the road approaching a junction: the incoming edge, or the one before a short link. */
+function approachLanes(gi: GraphIndex, incoming: number[]): string[][] | undefined {
+  let walked = 0;
+  for (const e of incoming) {
+    const l = gi.edges[e].turnLanes;
+    if (l) return l;
+    walked += gi.length(e);
+    if (walked > 60) break;
+  }
+  return undefined;
 }
 
 interface Seg {
@@ -40,7 +85,7 @@ interface Seg {
 
 const base = (p: Partial<NavInstruction> & Pick<NavInstruction, 'mode' | 'type' | 'distanceMeters' | 'key'>): NavInstruction => ({
   roadName: null, thenType: null, thenRoadName: null, thenDistanceMeters: null, rejoinMeters: null,
-  headBearing: null, relativeBearing: null, turnaroundVerified: null, approximate: false, ahead: [], ...p,
+  headBearing: null, relativeBearing: null, turnaroundVerified: null, approximate: false, ahead: [], lanes: null, ...p,
 });
 
 export class Navigator {
@@ -110,7 +155,10 @@ export class Navigator {
       if (!m) {
         return base({ mode: 'route', type: 'continue', roadName: edgeName(gi, gi.idx.get(plan.steps[bestK].edgeId)!), distanceMeters: 0, approximate, ahead, key: `${plan.planId}:end` });
       }
+      const incoming: number[] = [];
+      for (let k = m.stepIndex - 1; k >= Math.max(0, m.stepIndex - 4); k--) incoming.push(gi.idx.get(plan.steps[k].edgeId)!);
       return base({
+        lanes: laneHints(approachLanes(gi, incoming), m.type),
         mode: 'route', type: m.type, roadName: m.roadName, distanceMeters: m.distanceFromStartMeters - along,
         thenType: n?.type ?? null, thenRoadName: n?.roadName ?? null, thenDistanceMeters: n ? n.distanceFromStartMeters - m.distanceFromStartMeters : null,
         turnaroundVerified: m.turnaroundVerified, approximate, ahead, key: `${plan.planId}:${m.stepIndex}`,
@@ -181,7 +229,14 @@ export class Navigator {
     const m = upcoming[0];
     const n = upcoming[1];
     const ahead = segs.map((s) => slicePolyline(gi.edges[s.edge].geometry, gi.cum[s.edge], s.from, Math.max(s.from + 0.01, s.to)));
+    let lanes: LaneHint[] | null = null;
+    if (m && m.segIndex > 0) {
+      const incoming: number[] = [];
+      for (let k = m.segIndex - 1; k >= Math.max(0, m.segIndex - 4); k--) incoming.push(segs[k].edge);
+      lanes = laneHints(approachLanes(gi, incoming), m.type);
+    }
     return base({
+      lanes,
       mode: 'approach', type: m?.type ?? 'continue', roadName: m?.road ?? edgeName(gi, segs[0].edge), distanceMeters: (m?.at ?? total) - bestAlong,
       thenType: n?.type ?? null, thenRoadName: n?.road ?? null, thenDistanceMeters: m && n ? n.at - m.at : null,
       rejoinMeters: total - bestAlong, turnaroundVerified: m?.verified ?? null, approximate, ahead, key: `ap:${targetStep}:${m?.key ?? 'join'}`,
@@ -190,7 +245,7 @@ export class Navigator {
 }
 
 function approachManeuvers(gi: GraphIndex, segs: Seg[], plan: RoutePlan, targetStep: number) {
-  const out: { type: string; road: string | null; at: number; verified: boolean | null; key: string }[] = [];
+  const out: { type: string; road: string | null; at: number; verified: boolean | null; key: string; segIndex: number }[] = [];
   let d = 0;
   segs.forEach((s, k) => {
     if (k > 0) {
@@ -198,12 +253,12 @@ function approachManeuvers(gi: GraphIndex, segs: Seg[], plan: RoutePlan, targetS
       const type = s.turnaround ? 'turnaround' : classifyTurn(angleDiff(gi.endBearing[prev], gi.startBearing[s.edge]));
       const same = edgeName(gi, prev) === edgeName(gi, s.edge);
       if (!(type === 'continue' && same) && !(type.startsWith('slight') && same)) {
-        out.push({ type, road: edgeName(gi, s.edge), at: d, verified: s.turnaround ? s.turnaround === 'verified' : null, key: `${k}:${s.edge}` });
+        out.push({ type, road: edgeName(gi, s.edge), at: d, verified: s.turnaround ? s.turnaround === 'verified' : null, key: `${k}:${s.edge}`, segIndex: k });
       }
     }
     d += s.to - s.from;
   });
-  out.push({ type: 'join', road: edgeName(gi, gi.idx.get(plan.steps[targetStep].edgeId)!), at: d, verified: null, key: 'join' });
+  out.push({ type: 'join', road: edgeName(gi, gi.idx.get(plan.steps[targetStep].edgeId)!), at: d, verified: null, key: 'join', segIndex: -1 });
   return out;
 }
 

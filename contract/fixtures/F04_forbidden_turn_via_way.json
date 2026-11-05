@@ -245,6 +245,7 @@
     "osm:w36:n5-n6:f": "eligible"
    },
    "eligibilityReason": {},
+   "turnLanes": {},
    "nodePassage": {},
    "restrictions": [
     {

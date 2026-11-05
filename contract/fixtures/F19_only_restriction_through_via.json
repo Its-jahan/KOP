@@ -208,6 +208,7 @@
     "osm:w405:n3-n6:f": "eligible"
    },
    "eligibilityReason": {},
+   "turnLanes": {},
    "nodePassage": {},
    "restrictions": [
     {

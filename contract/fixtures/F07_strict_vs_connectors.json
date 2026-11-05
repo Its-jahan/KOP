@@ -134,6 +134,7 @@
     "osm:w64:n4-n1:f": "eligible"
    },
    "eligibilityReason": {},
+   "turnLanes": {},
    "nodePassage": {},
    "restrictions": []
   },

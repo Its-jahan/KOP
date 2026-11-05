@@ -18,7 +18,7 @@ import { MapView, circlePolygon } from './mapView';
 import { coveredFeatures, requirementFeatures, routeFeatures } from './geojson';
 import { DriveController, type DriveSnapshot } from './driveController';
 import { locationHub } from './locationHub';
-import type { NavInstruction } from '../core/navigator';
+import type { LaneHint, NavInstruction } from '../core/navigator';
 import type { GpsSourceState } from './gps';
 import type { LocationObservation } from '../core/types';
 
@@ -89,6 +89,9 @@ export function App() {
   const [myFix, setMyFix] = useState<LocationObservation | null>(null);
   const [myGps, setMyGps] = useState<GpsSourceState>('idle');
   const [follow, setFollow] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const centeredOnceRef = useRef(false);
 
   useEffect(() => {
@@ -565,145 +568,181 @@ export function App() {
   const reqMeters = prepared ? prepared.requirements.filter((r) => r.status !== 'needsReview').reduce((s, r) => s + r.lengthMeters, 0) : 0;
   const nrMeters = prepared ? prepared.requirements.filter((r) => r.status === 'needsReview').reduce((s, r) => s + r.lengthMeters, 0) : 0;
 
+  const step: 'area' | 'start' | 'route' = !prepared ? 'area' : !start?.confirmed ? 'start' : 'route';
+  const sheetPeek = pickStart || (step === 'area' && !sheetOpen);
+  const inDrive = tab === 'drive' && !!drive && !!driveSnap;
+  const pageOpen = tab === 'sessions' || tab === 'settings';
+
   return (
-    <div className="app">
-      <header className="topbar">
-        <strong>{t.appName}</strong>
+    <div className={`app ${inDrive ? 'mode-drive' : 'mode-prepare'}`}>
+      <div className="map-wrap">
+        <div className="map" ref={mapEl} data-testid="map" />
+      </div>
+
+      {/* top-left: menu + search (prepare) */}
+      <div className="top-left">
+        <button className="fab small" data-testid="menu" aria-label={t.menu} onClick={() => setMenuOpen(true)}>☰</button>
+        {!inDrive && <PlaceSearch t={t} lang={lang} onPick={(r) => mapRef.current?.fitBbox(r.bbox, 15)} />}
         {fixture && <span className="badge lab">{t.labBadge}</span>}
-        <nav>
-          {(['prepare', 'drive', 'sessions', 'settings'] as Tab[]).map((x) => (
-            <button key={x} className={tab === x ? 'active' : ''} onClick={() => { setTab(x); if (x === 'sessions') void refreshSessions(); }} disabled={x === 'drive' && !drive}>
-              {t[x]}
-            </button>
-          ))}
-        </nav>
-      </header>
-      {resumable && tab === 'prepare' && (
-        <div className="banner">
-          {t.resumeBanner} <button onClick={() => resumeSession(resumable)}>{t.resumeSession}</button>
-          <button className="ghost" onClick={() => setResumable(null)}>×</button>
+      </div>
+      {resumable && !inDrive && (
+        <div className="float-card resume" role="status">
+          <span>{t.resumeBanner}</span>
+          <button className="primary" onClick={() => resumeSession(resumable)}>{t.resumeSession}</button>
+          <button className="ghost" aria-label={t.cancel} onClick={() => setResumable(null)}>×</button>
         </div>
       )}
-      <main className={`layout tab-${tab}`}>
-        <div className="map-wrap">
-          <div className="map" ref={mapEl} data-testid="map" />
-          {tab === 'drive' && driveSnap?.status === 'active' && driveSnap.nav && <NavBanner t={t} lang={lang} n={driveSnap.nav} />}
-          <div className="map-buttons">
-            {tab === 'drive' && drive && driveSnap?.status === 'active' && (
-              <button className="map-btn" onClick={() => drive.setVoice(!driveSnap.voiceOn)} aria-label={driveSnap.voiceOn ? t.voiceOn : t.voiceOff}>{driveSnap.voiceOn ? '🔊' : '🔇'}</button>
-            )}
-            <button className={`map-btn ${follow ? 'on' : ''}`} onClick={goToMyLocation} aria-label={t.myLocation} title={t.myLocation} data-testid="my-location">◎</button>
-          </div>
-          <div className="where-chip" data-testid="where-chip">
-            {myFix ? `${t.youAreHere} · ±${fmtNum(myFix.horizontalAccuracyMeters ?? NaN, lang)} ${t.m}`
-              : myGps === 'permission_denied' ? t.permissionDenied
-              : myGps === 'insecure_context' ? t.insecure
-              : myGps === 'location_unavailable' ? t.locationOff
-              : myGps === 'idle' ? <button className="link" onClick={goToMyLocation}>{t.showMyLocation}</button>
-              : t.locating}
-          </div>
-        </div>
-        {tab === 'prepare' && (
-          <aside className="panel" data-testid="prepare-panel">
-            <PlaceSearch t={t} lang={lang} onPick={(r) => mapRef.current?.fitBbox(r.bbox, 15)} />
+
+      {/* right-side map controls */}
+      <div className="map-controls">
+        <button className="fab" aria-label="+" onClick={() => mapRef.current?.map.zoomIn()}>+</button>
+        <button className="fab" aria-label="−" onClick={() => mapRef.current?.map.zoomOut()}>−</button>
+        <button className="fab" aria-label={t.legend} onClick={() => setLegendOpen((v) => !v)} data-testid="legend-btn">◧</button>
+        {inDrive && driveSnap!.status === 'active' && (
+          <button className="fab" onClick={() => drive!.setVoice(!driveSnap!.voiceOn)} aria-label={driveSnap!.voiceOn ? t.voiceOn : t.voiceOff}>{driveSnap!.voiceOn ? '🔊' : '🔇'}</button>
+        )}
+        <button className={`fab primary-fab ${follow ? 'on' : ''}`} onClick={goToMyLocation} aria-label={t.myLocation} title={t.myLocation} data-testid="my-location">➤</button>
+      </div>
+      {legendOpen && <Legend t={t} onClose={() => setLegendOpen(false)} />}
+
+      <div className={`where-chip ${inDrive ? 'in-drive' : ''}`} data-testid="where-chip">
+        {myFix ? `${t.youAreHere} · ±${fmtNum(myFix.horizontalAccuracyMeters ?? NaN, lang)} ${t.m}`
+          : myGps === 'permission_denied' ? t.permissionDenied
+          : myGps === 'insecure_context' ? t.insecure
+          : myGps === 'location_unavailable' ? t.locationOff
+          : myGps === 'idle' ? <button className="link" onClick={goToMyLocation}>{t.showMyLocation}</button>
+          : t.locating}
+      </div>
+
+      {/* preparation: bottom sheet with 3 steps */}
+      {!inDrive && (
+        <aside className={`sheet ${sheetPeek ? 'peek' : ''}`} data-testid="prepare-panel">
+          <button className="sheet-handle" aria-label={t.more} onClick={() => setSheetOpen((v) => !v)}><span /></button>
+          <ol className="stepper">
+            {(['area', 'start', 'route'] as const).map((k, i) => {
+              const done = (k === 'area' && !!prepared) || (k === 'start' && !!start?.confirmed) || (k === 'route' && !!plan);
+              return <li key={k} className={`${step === k ? 'cur' : ''} ${done ? 'done' : ''}`}><span className="dot">{done ? '✓' : fmtNum(i + 1, lang)}</span>{t[`step_${k}` as keyof Strings] as string}</li>;
+            })}
+          </ol>
+          {prepared && graphState.kind === 'available' && (
+            <p className="summary ok" data-testid="graph-stats">{t.graphLoaded} · {t.required} {fmtMeters(reqMeters, t, lang)}{nrMeters > 0 ? ` · ${t.needsReview} ${fmtMeters(nrMeters, t, lang)}` : ''}
+              <button className="link small" onClick={() => { invalidatePrepared(); setGraphState({ kind: 'none' }); }}>{t.editArea}</button></p>
+          )}
+
+          {step === 'area' && (
             <section>
-              <h3>{t.zone}</h3>
-              <div className="seg">
-                <button className={zoneMode === 'polygon' ? 'on' : ''} onClick={() => { setZoneMode('polygon'); invalidatePrepared(); setGraphState({ kind: 'none' }); }}>{t.polygon}</button>
-                <button className={zoneMode === 'circle' ? 'on' : ''} onClick={() => { setZoneMode('circle'); invalidatePrepared(); setGraphState({ kind: 'none' }); }}>{t.circle}</button>
-              </div>
-              <p className="hint">{zoneMode === 'polygon' ? t.tapToAddVertex : t.tapToSetCenter}</p>
-              {zoneMode === 'polygon' ? (
-                <div className="row">
-                  <button disabled={!poly.length} onClick={() => { setPoly((p) => p.slice(0, -1)); invalidatePrepared(); setGraphState({ kind: 'none' }); }}>{t.undo}</button>
-                  <button disabled={!poly.length} onClick={() => { setPoly([]); invalidatePrepared(); setGraphState({ kind: 'none' }); }}>{t.clear}</button>
-                  <span className="muted">{fmtNum(poly.length, lang)} pts</span>
+              <div className="row">
+                <div className="seg">
+                  <button className={zoneMode === 'polygon' ? 'on' : ''} onClick={() => { setZoneMode('polygon'); invalidatePrepared(); setGraphState({ kind: 'none' }); }}>⬠ {t.polygon}</button>
+                  <button className={zoneMode === 'circle' ? 'on' : ''} onClick={() => { setZoneMode('circle'); invalidatePrepared(); setGraphState({ kind: 'none' }); }}>◯ {t.circle}</button>
                 </div>
-              ) : (
-                <label className="row">
-                  {t.radiusMeters}
-                  <input type="number" inputMode="numeric" min={20} max={5000} step={10} value={circle.radius} data-testid="radius"
-                    onChange={(e) => { setCircle((c) => ({ ...c, radius: Math.max(0, Number(e.target.value)) })); invalidatePrepared(); setGraphState({ kind: 'none' }); }} />
-                </label>
-              )}
-              {zoneVal && (
-                <p className={zoneVal.ok ? 'ok' : 'err'} data-testid="zone-status">
-                  {zoneVal.ok ? `${t.area}: ${fmtNum(zoneVal.areaSqMeters / 1e6, lang, 3)} km² · ${t.perimeter}: ${fmtMeters(zoneVal.perimeterMeters, t, lang)}` : `${t.zoneInvalid}: ${zoneVal.errors.map((e) => e.message).join(' ')}`}
-                </p>
-              )}
-            </section>
-            <section>
-              <h3>{t.boundaryPolicy}</h3>
-              <label className="row"><input type="radio" disabled={planning} checked={policy === 'STRICT_INSIDE'} onChange={() => setPolicy('STRICT_INSIDE')} /> {t.strictInside}</label>
-              <label className="row"><input type="radio" disabled={planning} checked={policy === 'ALLOW_NECESSARY_CONNECTORS'} onChange={() => setPolicy('ALLOW_NECESSARY_CONNECTORS')} /> {t.allowConnectors}</label>
-              {policy === 'ALLOW_NECESSARY_CONNECTORS' && <p className="hint">{t.allowConnectorsWarn}</p>}
-              <label className="row"><input type="checkbox" disabled={planning} checked={returnToStart} onChange={(e) => { setReturnToStart(e.target.checked); setPlan(null); }} /> {t.returnToStart}</label>
-            </section>
-            <section>
-              <h3>{t.roadData}</h3>
-              <button className="primary" disabled={!zoneVal?.ok || graphState.kind === 'fetching'} onClick={loadRoads} data-testid="load-roads">{t.fetchRoads}</button>
+                {zoneMode === 'polygon' ? (
+                  <>
+                    <button className="icon-btn" disabled={!poly.length} onClick={() => { setPoly((p) => p.slice(0, -1)); invalidatePrepared(); setGraphState({ kind: 'none' }); }} aria-label={t.undo} title={t.undo}>↶</button>
+                    <button className="icon-btn" disabled={!poly.length} onClick={() => { setPoly([]); invalidatePrepared(); setGraphState({ kind: 'none' }); }} aria-label={t.clear} title={t.clear}>✕</button>
+                  </>
+                ) : (
+                  <label className="radius">{t.radiusMeters}
+                    <input type="number" inputMode="numeric" min={20} max={5000} step={10} value={circle.radius} data-testid="radius"
+                      onChange={(e) => { setCircle((c) => ({ ...c, radius: Math.max(0, Number(e.target.value)) })); invalidatePrepared(); setGraphState({ kind: 'none' }); }} />
+                  </label>
+                )}
+              </div>
+              <p className={`status-line ${zoneVal ? (zoneVal.ok ? 'ok' : 'err') : 'hint'}`} data-testid="zone-status">
+                {!zoneVal ? (zoneMode === 'polygon' ? t.tapToAddVertex : t.tapToSetCenter)
+                  : zoneVal.ok ? `${t.area}: ${fmtNum(zoneVal.areaSqMeters / 1e6, lang, 3)} km² · ${t.perimeter}: ${fmtMeters(zoneVal.perimeterMeters, t, lang)}`
+                  : `${t.zoneInvalid}: ${zoneVal.errors.map((e) => e.message).join(' ')}`}
+              </p>
+              <button className="primary big" disabled={!zoneVal?.ok || graphState.kind === 'fetching'} onClick={loadRoads} data-testid="load-roads">
+                {graphState.kind === 'fetching' ? t.fetching : t.fetchRoads}
+              </button>
               {graphState.kind === 'fetching' && (
-                <p className="muted">{t.fetching} {graphState.endpoint && `(${new URL(graphState.endpoint).host} #${graphState.attempt})`} <button className="ghost" onClick={() => { abortRef.current?.abort(); setGraphState({ kind: 'none' }); }}>{t.cancel}</button></p>
+                <p className="muted small">{graphState.endpoint && `${new URL(graphState.endpoint).host} #${graphState.attempt}`} <button className="link" onClick={() => { abortRef.current?.abort(); setGraphState({ kind: 'none' }); }}>{t.cancel}</button></p>
               )}
               {graphState.kind === 'failed' && <p className="err" data-testid="graph-error">{t.graphFailed}: {graphState.outcome.code}{graphState.outcome.dataState ? ` (${graphState.outcome.dataState})` : ''}</p>}
-              {graphState.kind === 'available' && prepared && (
-                <div className="stats" data-testid="graph-stats">
-                  <p className="ok">{t.graphLoaded} · {prepared.graph.graphId} · OSM {prepared.graph.sourceDatasetVersion.slice(0, 16)}</p>
-                  <p>{t.required}: {fmtMeters(reqMeters, t, lang)} ({fmtNum(prepared.requirements.filter((r) => r.status !== 'needsReview').length, lang)})</p>
-                  <p>{t.needsReview}: {fmtMeters(nrMeters, t, lang)}</p>
-                  <p className="muted small">{t.dataSource}</p>
-                </div>
+              {!sheetPeek && <p className="muted small">{t.dataSource}</p>}
+            </section>
+          )}
+
+          {step === 'start' && prepared && (
+            <section>
+              <div className="row">
+                <button className={pickStart ? 'on' : 'primary'} disabled={planning} onClick={() => setPickStart(true)} data-testid="pick-start">📍 {t.tapForStart}</button>
+                <button onClick={useMyLocation}>➤ {t.useMyLocation}</button>
+              </div>
+              {startMsg && <p className="err">{startMsg}</p>}
+              {start && (
+                <>
+                  <p className="status-line" data-testid="start-info">{t.startSnapped}: <bdi>{roadName(prepared.gi, start.edgeId) ?? start.edgeId}</bdi> · {fmtMeters(start.distance, t, lang)}</p>
+                  <div className="row">
+                    <button onClick={flipStart} disabled={prepared.gi.reciprocal[prepared.gi.idx.get(start.edgeId)!] < 0}>⇄ {t.flipDirection}</button>
+                    <button className="primary" onClick={() => setStart({ ...start, confirmed: true })} data-testid="confirm-start">✓ {t.confirmStart}</button>
+                  </div>
+                </>
               )}
             </section>
-            {prepared && (
-              <section>
-                <h3>{t.start}</h3>
-                <div className="row">
-                  <button className={pickStart ? 'on' : ''} disabled={planning} onClick={() => setPickStart(true)} data-testid="pick-start">{t.tapForStart}</button>
-                  <button onClick={useMyLocation}>{t.useMyLocation}</button>
-                </div>
-                {startMsg && <p className="err">{startMsg}</p>}
-                {start && (
-                  <div>
-                    <p data-testid="start-info">{t.startSnapped}: {roadName(prepared.gi, start.edgeId) ?? start.edgeId} · {fmtMeters(start.distance, t, lang)}</p>
-                    <div className="row">
-                      <button onClick={flipStart} disabled={prepared.gi.reciprocal[prepared.gi.idx.get(start.edgeId)!] < 0}>{t.flipDirection}</button>
-                      <button className={start.confirmed ? 'on' : 'primary'} onClick={() => setStart({ ...start, confirmed: true })} data-testid="confirm-start">{start.confirmed ? t.startConfirmed : t.confirmStart}</button>
-                    </div>
-                  </div>
-                )}
-              </section>
-            )}
-            {prepared && start?.confirmed && (
-              <section>
-                <div className="row">
-                  <button className="primary" onClick={makePlan} disabled={planning} data-testid="plan">{planning ? t.planning : t.plan}</button>
-                  {planning && <button onClick={cancelPlanning}>{t.cancel}</button>}
-                </div>
-                {plan && <PlanSummary t={t} lang={lang} plan={plan} approve={approveOutside} setApprove={setApproveOutside} />}
-              </section>
-            )}
+          )}
+
+          {step === 'route' && prepared && start && (
             <section>
-              <button className="primary big" disabled={startBlockers.length > 0} onClick={beginDriving} data-testid="start-driving">{t.startDriving}</button>
+              <p className="status-line">{t.startSnapped}: <bdi>{roadName(prepared.gi, start.edgeId) ?? '—'}</bdi> <button className="link small" onClick={() => setStart({ ...start, confirmed: false })}>{t.change}</button></p>
+              <div className="row">
+                <div className="seg">
+                  <button className={policy === 'STRICT_INSIDE' ? 'on' : ''} disabled={planning} onClick={() => setPolicy('STRICT_INSIDE')} title={t.strictInside}>{t.policyStrictShort}</button>
+                  <button className={policy === 'ALLOW_NECESSARY_CONNECTORS' ? 'on' : ''} disabled={planning} onClick={() => setPolicy('ALLOW_NECESSARY_CONNECTORS')} title={t.allowConnectors}>{t.policyAllowShort}</button>
+                </div>
+                <label className="check"><input type="checkbox" disabled={planning} checked={returnToStart} onChange={(e) => { setReturnToStart(e.target.checked); setPlan(null); }} /> {t.returnToStart}</label>
+              </div>
+              <div className="row">
+                <button className={plan ? '' : 'primary'} onClick={makePlan} disabled={planning} data-testid="plan">{planning ? t.planning : plan ? t.replan : t.plan}</button>
+                {planning && <button onClick={cancelPlanning}>{t.cancel}</button>}
+              </div>
+              {plan && <PlanSummary t={t} lang={lang} plan={plan} approve={approveOutside} setApprove={setApproveOutside} />}
+              <button className="go big" disabled={startBlockers.length > 0} onClick={beginDriving} data-testid="start-driving">▶ {t.startDriving}</button>
               {startBlockers.length > 0 && <p className="muted small" data-testid="start-blockers">{t.startDisabled}: {startBlockers.join(' · ')}</p>}
-              <p className="muted small">{t.foregroundNote}</p>
-              <p className="muted small">{t.safety}</p>
+              <details className="small muted"><summary>{t.safetyTitle}</summary><p>{t.foregroundNote}</p><p>{t.safety}</p></details>
             </section>
-          </aside>
-        )}
-        {tab === 'drive' && drive && driveSnap && <DrivePanel t={t} lang={lang} snap={driveSnap} dc={drive} gi={driveGi!} onToast={setToast} />}
-        {tab === 'sessions' && (
-          <aside className="panel">
-            <SessionsPanel t={t} lang={lang} sessions={sessions} onResume={resumeSession} onExport={exportSession} onImport={importFile}
-              onDelete={async (h) => { if (store && confirm(t.confirmDelete)) { await store.deleteSession(h.sessionId); await refreshSessions(); } }} />
-          </aside>
-        )}
-        {tab === 'settings' && (
-          <aside className="panel">
-            <SettingsPanel t={t} lang={lang} setLang={setLang} graph={prepared?.graph ?? null} storeError={storeError} />
-          </aside>
-        )}
-      </main>
+          )}
+        </aside>
+      )}
+
+      {/* driving HUD */}
+      {inDrive && <DriveHud t={t} lang={lang} snap={driveSnap!} dc={drive!} onToast={setToast} onBackToPrepare={() => setTab('prepare')} onMenu={() => setMenuOpen(true)} />}
+
+      {/* menu drawer */}
+      {menuOpen && (
+        <div className="scrim" onClick={() => setMenuOpen(false)}>
+          <nav className="drawer" onClick={(e) => e.stopPropagation()}>
+            <strong className="drawer-title">{t.appName}</strong>
+            {drive && <button onClick={() => { setTab('drive'); setMenuOpen(false); }}>🚗 {t.drive}</button>}
+            <button onClick={() => { setTab('prepare'); setMenuOpen(false); }}>🗺 {t.prepare}</button>
+            <button onClick={() => { setTab('sessions'); void refreshSessions(); setMenuOpen(false); }}>🗂 {t.sessions}</button>
+            <button onClick={() => { setTab('settings'); setMenuOpen(false); }}>⚙ {t.settings}</button>
+            <div className="seg drawer-lang">
+              <button className={lang === 'fa' ? 'on' : ''} onClick={() => setLang('fa')}>فارسی</button>
+              <button className={lang === 'en' ? 'on' : ''} onClick={() => setLang('en')}>English</button>
+            </div>
+            <p className="small muted">{t.attribution}</p>
+          </nav>
+        </div>
+      )}
+
+      {/* full-screen pages */}
+      {pageOpen && (
+        <div className="page">
+          <header className="page-head">
+            <button className="icon-btn" data-testid="close-page" aria-label={t.back} onClick={() => setTab(drive ? 'drive' : 'prepare')}>←</button>
+            <strong>{tab === 'sessions' ? t.sessions : t.settings}</strong>
+          </header>
+          <div className="page-body">
+            {tab === 'sessions' && (
+              <SessionsPanel t={t} lang={lang} sessions={sessions} onResume={resumeSession} onExport={exportSession} onImport={importFile}
+                onDelete={async (h) => { if (store && confirm(t.confirmDelete)) { await store.deleteSession(h.sessionId); await refreshSessions(); } }} />
+            )}
+            {tab === 'settings' && <SettingsPanel t={t} lang={lang} setLang={setLang} graph={prepared?.graph ?? null} storeError={storeError} />}
+          </div>
+        </div>
+      )}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
@@ -722,8 +761,8 @@ function PlaceSearch({ t, lang, onPick }: { t: Strings; lang: Lang; onPick: (r: 
   const [res, setRes] = useState<PlaceResult[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   return (
-    <section>
-      <form className="row" onSubmit={async (e) => {
+    <div className="search">
+      <form className="search-pill" onSubmit={async (e) => {
         e.preventDefault();
         if (!q.trim()) return;
         setBusy(true);
@@ -736,19 +775,19 @@ function PlaceSearch({ t, lang, onPick }: { t: Strings; lang: Lang; onPick: (r: 
           setBusy(false);
         }
       }}>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.searchPlaceholder} aria-label={t.search} />
-        <button type="submit" disabled={busy}>{busy ? t.searching : t.search}</button>
+        <span className="search-ico">⌕</span>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t.searchPlaceholder} aria-label={t.search} enterKeyHint="search" />
+        {busy && <span className="small muted">{t.searching}</span>}
       </form>
-      {err && <p className="err">{err}</p>}
-      {res && res.length === 0 && <p className="muted">{t.noResults}</p>}
+      {(err || (res && res.length === 0)) && <p className="search-msg">{err ?? t.noResults}</p>}
       {res && res.length > 0 && (
         <ul className="results">
           {res.map((r, i) => (
-            <li key={i}><button className="link" onClick={() => { onPick(r); setRes(null); }}>{r.displayName}</button></li>
+            <li key={i}><button onClick={() => { onPick(r); setRes(null); setQ(r.displayName.split(',')[0]); }}><strong>{r.displayName.split(',')[0]}</strong><span className="small muted">{r.displayName.split(',').slice(1, 3).join(',')}</span></button></li>
           ))}
         </ul>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -756,18 +795,27 @@ function PlanSummary({ t, lang, plan, approve, setApprove }: { t: Strings; lang:
   const p = plan.plan;
   const causes = p.unreachable.reduce<Record<string, number>>((m, u) => ((m[u.cause] = (m[u.cause] ?? 0) + 1), m), {});
   const unverified = p.steps.filter((s) => s.turnaroundAtStart === 'unverified').length;
+  const unplanned = Object.values(causes).reduce((a, b) => a + b, 0);
   return (
-    <div className="stats" data-testid="plan-summary">
-      <h4>{t.planSummary} · {p.status} · {plan.validation.ok ? '✓' : '✗'} <span className="muted small">({Math.round(plan.ms)} ms, {p.algorithm} {p.algorithmVersion})</span></h4>
-      <p>{t.totalDistance}: {fmtMeters(p.totals.totalMeters, t, lang)}</p>
-      <p>{t.newCoverage}: {fmtMeters(p.totals.newCoverageMeters, t, lang)} ({fmtNum(p.coveredRequirementIds.length, lang)})</p>
-      <p>{t.repeats}: {fmtMeters(p.totals.repeatMeters, t, lang)}</p>
-      <p>{t.outside}: {fmtMeters(p.totals.outsideMeters, t, lang)}</p>
-      <p>{t.unreachable}: {Object.entries(causes).map(([k, v]) => `${k} ${fmtNum(v, lang)}`).join(' · ') || '0'}</p>
-      <p>{t.unverifiedTurnarounds}: {fmtNum(unverified, lang)}</p>
-      {!plan.validation.ok && <p className="err">{plan.validation.errors.slice(0, 5).join(', ')}</p>}
+    <div className="plan-card" data-testid="plan-summary">
+      <div className="kpis">
+        <div><b>{fmtMeters(p.totals.totalMeters, t, lang)}</b><span>{t.totalDistance}</span></div>
+        <div><b>{fmtMeters(p.totals.newCoverageMeters, t, lang)}</b><span>{t.newCoverage}</span></div>
+        <div><b>{fmtMeters(p.totals.repeatMeters, t, lang)}</b><span>{t.repeats}</span></div>
+        {p.totals.outsideMeters > 2 && <div className="warn"><b>{fmtMeters(p.totals.outsideMeters, t, lang)}</b><span>{t.outside}</span></div>}
+      </div>
+      <p className="small">
+        <span className={plan.validation.ok ? 'ok' : 'err'}>{p.status} · {plan.validation.ok ? '✓' : '✗'}</span>
+        {unplanned > 0 && <> · {t.unreachable}: {fmtNum(unplanned, lang)}</>}
+        {unverified > 0 && <> · {t.unverifiedTurnarounds}: {fmtNum(unverified, lang)}</>}
+      </p>
+      <details className="small muted"><summary>{t.details}</summary>
+        <p>{Object.entries(causes).map(([k, v]) => `${k} ${fmtNum(v, lang)}`).join(' · ') || '—'}</p>
+        <p>{p.algorithm} {p.algorithmVersion} · {Math.round(plan.ms)} ms</p>
+        {!plan.validation.ok && <p className="err">{plan.validation.errors.slice(0, 5).join(', ')}</p>}
+      </details>
       {p.totals.outsideMeters > 2 && (
-        <label className="row warn"><input type="checkbox" checked={approve} onChange={(e) => setApprove(e.target.checked)} data-testid="approve-outside" /> {t.approveOutside} ({fmtMeters(p.totals.outsideMeters, t, lang)})</label>
+        <label className="check warn"><input type="checkbox" checked={approve} onChange={(e) => setApprove(e.target.checked)} data-testid="approve-outside" /> {t.approveOutside} ({fmtMeters(p.totals.outsideMeters, t, lang)})</label>
       )}
     </div>
   );
@@ -784,31 +832,54 @@ function navAction(t: Strings, n: NavInstruction): string {
   return ((t as unknown as Record<string, string>)[n.type]) ?? t.continue;
 }
 
-/** Big turn-by-turn banner over the map. */
-function NavBanner({ t, lang, n }: { t: Strings; lang: Lang; n: NavInstruction }) {
-  const glyph = n.mode === 'to_road' ? '➤' : n.type === 'join' ? '⤴' : MANEUVER_ICON[n.type] ?? '↑';
-  const rot = n.mode === 'to_road' ? (n.relativeBearing ?? n.headBearing ?? 0) - 90 : 0;
+/** Lane strip: one arrow per lane, usable lanes bright, others dimmed. */
+function LaneStrip({ lanes }: { lanes: LaneHint[] }) {
   return (
-    <div className="nav-banner" data-testid="nav-banner" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
-      <div className="nav-main">
-        <span className="nav-glyph" style={{ transform: `rotate(${rot}deg)` }}>{glyph}</span>
-        <div>
-          <div className="nav-dist">{fmtMeters(n.distanceMeters, t, lang)}</div>
-          <div className="nav-act">{navAction(t, n)}</div>
-          {n.roadName && <div className="nav-road">{t.onto} <bdi>{n.roadName}</bdi></div>}
-        </div>
-      </div>
-      {n.mode === 'approach' && n.rejoinMeters !== null && <div className="nav-sub">{t.navGoToRoute} · {fmtMeters(n.rejoinMeters, t, lang)} {t.navToRoute}</div>}
-      {n.thenType && n.thenDistanceMeters !== null && n.thenDistanceMeters < 400 && (
-        <div className="nav-then">{t.navThen}: {n.thenType === 'join' ? t.navJoinRoute : `${MANEUVER_ICON[n.thenType] ?? ''} ${((t as unknown as Record<string, string>)[n.thenType]) ?? ''}`}{n.thenRoadName ? ` · ${n.thenRoadName}` : ''}</div>
-      )}
-      {n.approximate && <div className="nav-approx">{t.navApproximate}</div>}
+    <div className="lanes" data-testid="lanes" dir="ltr">
+      {lanes.map((l, i) => (
+        <span key={i} className={`lane ${l.ok ? 'ok' : ''}`} data-ok={l.ok ? '1' : '0'}>
+          {l.turns.map((x, k) => <span key={k} className="lane-arrow" style={{ transform: `rotate(${LANE_ROT[x] ?? 0}deg)` }}>{x === 'reverse' ? '↶' : '↑'}</span>)}
+        </span>
+      ))}
     </div>
   );
 }
 
-function DrivePanel({ t, lang, snap, dc, onToast }: { t: Strings; lang: Lang; snap: DriveSnapshot; dc: DriveController; gi: GraphIndex; onToast: (s: string) => void }) {
+const LANE_ROT: Record<string, number> = {
+  left: -90, slight_left: -45, sharp_left: -135, through: 0, none: 0, right: 90, slight_right: 45, sharp_right: 135, merge_to_left: -30, merge_to_right: 30, reverse: 0,
+};
+
+/** Maneuver card: what to do next, how far, which street, which lane. */
+function ManeuverCard({ t, lang, n }: { t: Strings; lang: Lang; n: NavInstruction }) {
+  const glyph = n.mode === 'to_road' ? '➤' : n.type === 'join' ? '⤴' : MANEUVER_ICON[n.type] ?? '↑';
+  const rot = n.mode === 'to_road' ? (n.relativeBearing ?? n.headBearing ?? 0) - 90 : 0;
+  const now = n.distanceMeters < 40 && n.mode !== 'to_road';
+  return (
+    <div className={`maneuver-card ${now ? 'now' : ''}`} data-testid="nav-banner" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+      <div className="mc-main">
+        <span className="mc-glyph" style={{ transform: `rotate(${rot}deg)` }}>{glyph}</span>
+        <div className="mc-text">
+          <div className="mc-dist">{fmtMeters(n.distanceMeters, t, lang)}</div>
+          <div className="mc-act">{navAction(t, n)}{n.roadName && <> {t.onto} <bdi>{n.roadName}</bdi></>}</div>
+        </div>
+      </div>
+      {n.lanes && <LaneStrip lanes={n.lanes} />}
+      {(n.mode === 'approach' || (n.thenType && n.thenDistanceMeters !== null && n.thenDistanceMeters < 400) || n.approximate) && (
+        <div className="mc-sub">
+          {n.thenType && n.thenDistanceMeters !== null && n.thenDistanceMeters < 400 && (
+            <span className="mc-then">{t.navThen} {n.thenType === 'join' ? '⤴' : MANEUVER_ICON[n.thenType] ?? ''}</span>
+          )}
+          {n.mode === 'approach' && n.rejoinMeters !== null && <span>{t.navGoToRoute} · {fmtMeters(n.rejoinMeters, t, lang)}</span>}
+          {n.approximate && <span className="mc-approx">{t.navApproximate}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DriveHud({ t, lang, snap, dc, onToast, onBackToPrepare, onMenu }: { t: Strings; lang: Lang; snap: DriveSnapshot; dc: DriveController; onToast: (s: string) => void; onBackToPrepare: () => void; onMenu: () => void }) {
   const [, force] = useState(0);
+  const [more, setMore] = useState(false);
   useEffect(() => {
     const id = setInterval(() => force((x) => x + 1), 1000);
     return () => clearInterval(id);
@@ -824,66 +895,85 @@ function DrivePanel({ t, lang, snap, dc, onToast }: { t: Strings; lang: Lang; sn
     : snap.quality === 'weak_ambiguous' ? t.weak
     : snap.quality === 'off_graph' ? t.offGraph
     : t.acquiring;
-  const gpsClass = snap.quality === 'reliable' && fixAge !== null && fixAge <= 10 && fixAge >= -5 && snap.status === 'active' ? 'ok' : 'warn';
+  const gpsOk = snap.quality === 'reliable' && fixAge !== null && fixAge <= 10 && fixAge >= -5 && snap.status === 'active';
   const nm = fixAge !== null && fixAge <= 5 && fixAge >= -5 && snap.status === 'active' ? snap.nextManeuver : null;
+  const statusText = snap.replanning ? t.replanning
+    : snap.notice === 'outside_policy' ? t.outsideZoneStop
+    : snap.notice === 'finished' ? t.finished
+    : snap.status === 'paused' ? t.paused
+    : nm ? `${navActionType(t, nm.type, nm.turnaroundVerified)} · ${fmtMeters(nm.distanceMeters, t, lang)}`
+    : t.noGuidance;
+  const pct = Math.min(100, m.percentConfirmed);
   return (
-    <aside className="panel drive" data-testid="drive-panel">
-      <div className={`gps ${gpsClass}`} data-testid="gps-state">
-        {t.gps}: {gpsLabel}
-        {snap.lastFix && <span className="small"> · {t.accuracy} {fmtNum(snap.lastFix.horizontalAccuracyMeters ?? NaN, lang)} {t.m} · {t.age} {fmtNum(fixAge ?? 0, lang)} s</span>}
+    <>
+      <div className="hud-top">
+        {snap.status === 'active' && snap.nav && !snap.replanning ? <ManeuverCard t={t} lang={lang} n={snap.nav} /> : (
+          <div className="maneuver-card muted-card" data-testid="maneuver">{statusText}</div>
+        )}
+        {snap.pendingOutsidePlan && (
+          <div className="float-card warn">
+            {t.outsideNeedsApproval}: {fmtMeters(snap.pendingOutsidePlan.outsideMeters, t, lang)}
+            <button onClick={() => { if (confirm(`${t.outsideNeedsApproval}: ${fmtMeters(snap.pendingOutsidePlan!.outsideMeters, t, lang)}`)) void dc.approvePendingOutside(); }}>{t.approve}</button>
+          </div>
+        )}
       </div>
-      <div className="maneuver" data-testid="maneuver">
-        {snap.replanning ? <span>{t.replanning}</span>
-          : snap.pendingOutsidePlan ? (
-            <span className="warn">
-              {t.outsideNeedsApproval}: {fmtMeters(snap.pendingOutsidePlan.outsideMeters, t, lang)} ({fmtMeters(snap.pendingOutsidePlan.approvedMeters, t, lang)})
-              {' '}<button onClick={() => { if (confirm(`${t.outsideNeedsApproval}: ${fmtMeters(snap.pendingOutsidePlan!.outsideMeters, t, lang)}`)) void dc.approvePendingOutside(); }}>{t.approve}</button>
-            </span>
-          )
-          : snap.notice === 'outside_policy' ? <span className="warn">{t.outsideZoneStop}</span>
-          : snap.notice === 'finished' ? <span>{t.finished}</span>
-          : snap.nav ? <span>{navAction(t, snap.nav)} · <strong>{fmtMeters(snap.nav.distanceMeters, t, lang)}</strong></span>
-          : nm ? (
-            <>
-              <span className="icon">{MANEUVER_ICON[nm.type] ?? '•'}</span>
-              <span>
-                {nm.type === 'turnaround' && !nm.turnaroundVerified ? t.turnaroundUnverified : t[nm.type as keyof Strings] as string}
-                {nm.roadName && ` ${t.onto} `}<bdi>{nm.roadName}</bdi>
-                <strong> {t.in} {fmtMeters(nm.distanceMeters, t, lang)}</strong>
-              </span>
-            </>
-          ) : <span className="muted">{t.noGuidance}</span>}
-      </div>
-      {snap.notice === 'hidden_gap' && <p className="warn small">{t.hiddenWarning}</p>}
-      {snap.notice === 'recovered' && <p className="warn small" data-testid="recovered">{t.recovered}</p>}
-      {snap.unsavedEvents > 0 && <p className="err small">{fmtNum(snap.unsavedEvents, lang)} {t.unsaved}</p>}
-      {snap.notice === 'storage_error' && <p className="err small">{t.storage}: {snap.storageError}</p>}
-      <div className="progress" data-testid="progress">
-        <div className="bar"><div style={{ width: `${Math.min(100, m.percentConfirmed)}%` }} /></div>
-        <p>{t.confirmed}: {fmtMeters(m.confirmedMeters, t, lang)} / {fmtMeters(m.totalRequiredMeters, t, lang)} ({fmtNum(m.percentConfirmed, lang, 1)}%)</p>
-        <p className="small">{t.remaining} {fmtMeters(m.remainingMeters, t, lang)} · {t.blocked} {fmtMeters(m.blockedMeters, t, lang)} · {t.unreachable} {fmtMeters(m.unreachableMeters, t, lang)} · {t.needsReview} {fmtMeters(m.needsReviewMeters, t, lang)}</p>
-      </div>
-      <div className="row big-buttons">
-        {snap.status === 'active' ? <button onClick={() => dc.pause()} data-testid="pause">{t.pause}</button>
-          : snap.status !== 'ended' ? <button className="primary" onClick={() => dc.startOrResume()} data-testid="resume">{t.resume}</button> : null}
-        <button disabled={!snap.matched || snap.status !== 'active'} onClick={async () => { if (confirm(t.confirmBlocked)) { const ok = await dc.blockCurrentRoad(); if (!ok) onToast(t.offGraph); } }}>{t.reportBlocked}</button>
-        {snap.status !== 'ended' && <button className="danger" onClick={() => { if (confirm(t.confirmEnd)) void dc.end(); }}>{t.end}</button>}
-      </div>
-      <p className="small muted">{snap.wakeLock === 'held' ? t.wakeLockOn : t.wakeLockOff}</p>
-      <Legend t={t} />
-      <p className="muted small">{t.foregroundNote}</p>
-    </aside>
+      <aside className="drive-bar" data-testid="drive-panel">
+        <div className="db-row">
+          <div className="ring" style={{ background: `conic-gradient(var(--done) ${pct * 3.6}deg, var(--track) 0)` }}><span>{fmtNum(pct, lang, 0)}%</span></div>
+          <div className="db-info">
+            <div className="db-progress" data-testid="progress">
+              {fmtMeters(m.confirmedMeters, t, lang)} / {fmtMeters(m.totalRequiredMeters, t, lang)} {t.confirmedShort}
+              {'\n'}<span className="small muted">{t.remaining} {fmtMeters(m.remainingMeters, t, lang)} · {t.blocked} {fmtMeters(m.blockedMeters, t, lang)} · {t.unreachable} {fmtMeters(m.unreachableMeters, t, lang)} · {t.needsReview} {fmtMeters(m.needsReviewMeters, t, lang)}</span>
+            </div>
+            <div className={`db-gps ${gpsOk ? 'ok' : 'warn'}`} data-testid="gps-state">
+              <span className="gdot" />{t.gps}: {gpsLabel}
+              {snap.lastFix && <span className="small"> · ±{fmtNum(snap.lastFix.horizontalAccuracyMeters ?? NaN, lang)} {t.m} · {fmtNum(fixAge ?? 0, lang)} s</span>}
+            </div>
+          </div>
+          {snap.status === 'active' ? <button className="round-btn" onClick={() => dc.pause()} data-testid="pause" aria-label={t.pause}>⏸<span>{t.pause}</span></button>
+            : snap.status !== 'ended' ? <button className="round-btn go" onClick={() => dc.startOrResume()} data-testid="resume" aria-label={t.resume}>▶<span>{t.resume}</span></button> : null}
+          <button className="round-btn" onClick={() => setMore((v) => !v)} aria-label={t.more} data-testid="more">⋯<span>{t.more}</span></button>
+        </div>
+        {(snap.notice === 'hidden_gap' || snap.notice === 'recovered' || snap.notice === 'storage_error' || snap.unsavedEvents > 0 || snap.wakeLock !== 'held') && (
+          <div className="db-notes small">
+            {snap.notice === 'hidden_gap' && <p className="warn">{t.hiddenWarning}</p>}
+            {snap.notice === 'recovered' && <p className="warn" data-testid="recovered">{t.recovered}</p>}
+            {snap.notice === 'storage_error' && <p className="err">{t.storage}: {snap.storageError}</p>}
+            {snap.unsavedEvents > 0 && <p className="err">{fmtNum(snap.unsavedEvents, lang)} {t.unsaved}</p>}
+            {snap.wakeLock !== 'held' && snap.status === 'active' && <p className="muted">{t.wakeLockOff}</p>}
+          </div>
+        )}
+        {more && (
+          <div className="more-sheet">
+            <button disabled={!snap.matched || snap.status !== 'active'} onClick={async () => { if (confirm(t.confirmBlocked)) { const ok = await dc.blockCurrentRoad(); if (!ok) onToast(t.offGraph); } setMore(false); }}>⛔ {t.reportBlocked}</button>
+            <button onClick={() => { setMore(false); onBackToPrepare(); }}>🗺 {t.prepare}</button>
+            <button data-testid="more-menu" onClick={() => { setMore(false); onMenu(); }}>☰ {t.menu}</button>
+            {snap.status !== 'ended' && <button className="danger" onClick={() => { if (confirm(t.confirmEnd)) void dc.end(); setMore(false); }}>■ {t.end}</button>}
+            <p className="small muted">{t.foregroundNote}</p>
+          </div>
+        )}
+      </aside>
+    </>
   );
 }
 
-function Legend({ t }: { t: Strings }) {
-  const items: [string, string][] = [['#d6336c', t.unvisited], ['#f08c00', t.partial], ['#2b8a3e', t.covered], ['#495057', t.blocked], ['#7048e8', t.unreachable], ['#e8b600', t.needsReview], ['rgba(25,113,194,.5)', t.plannedRoute], ['rgba(174,62,201,.5)', t.outsideConnector]];
+function navActionType(t: Strings, type: string, verified: boolean | null): string {
+  if (type === 'turnaround' && !verified) return t.turnaroundUnverified;
+  return ((t as unknown as Record<string, string>)[type]) ?? t.continue;
+}
+
+function Legend({ t, onClose }: { t: Strings; onClose: () => void }) {
+  const items: [string, string, string][] = [
+    ['var(--todo)', t.unvisited, 'solid'], ['var(--done)', t.covered, 'solid'], ['var(--partial)', t.partial, 'solid'],
+    ['var(--route)', t.routeAhead, 'thick'], ['var(--plan)', t.plannedRoute, 'faint'], ['var(--outside)', t.outsideConnector, 'faint'],
+    ['var(--blocked)', t.blocked, 'dashed'], ['var(--unreach)', t.unreachable, 'dotted'], ['var(--review)', t.needsReview, 'dashed'],
+  ];
   return (
-    <details className="legend">
-      <summary>{t.legend}</summary>
-      <ul>{items.map(([c, l]) => <li key={l}><span className="sw" style={{ background: c }} />{l}</li>)}</ul>
-      <p className="small muted">→ each direction is drawn on its own right-hand side with arrows.</p>
-    </details>
+    <div className="legend-pop" role="dialog" aria-label={t.legend} data-testid="legend">
+      <div className="lp-head"><strong>{t.legend}</strong><button className="ghost" onClick={onClose} aria-label={t.cancel}>×</button></div>
+      <ul>{items.map(([c, l, k]) => <li key={l}><span className={`sw ${k}`} style={{ ['--c' as string]: c }} />{l}</li>)}</ul>
+      <p className="small muted">{t.legendDirections}</p>
+    </div>
   );
 }
 

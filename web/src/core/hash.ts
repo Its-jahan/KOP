@@ -49,6 +49,8 @@ export function canonicalHashDocument(g: GraphSnapshot): Record<string, unknown>
         eligibility: e.eligibility,
         eligibilityReason: e.eligibilityReason,
         dataConfidence: e.dataConfidence,
+        // Additive (contract fixture revision 4): only present when mapped, so older hashes stay valid.
+        ...(e.turnLanes ? { turnLanes: e.turnLanes } : {}),
       })),
     turnRestrictions: g.turnRestrictions
       .slice()

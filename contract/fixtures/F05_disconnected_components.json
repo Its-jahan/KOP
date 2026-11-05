@@ -108,6 +108,7 @@
     "osm:w41:n3-n4:f": "eligible"
    },
    "eligibilityReason": {},
+   "turnLanes": {},
    "nodePassage": {},
    "restrictions": []
   },

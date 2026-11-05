@@ -1,0 +1,233 @@
+{
+ "fixtureId": "F22_turn_lanes",
+ "title": "Lane indications per travel direction",
+ "description": "turn:lanes:forward/backward map to the matching directed edge; plain turn:lanes only on one-way roads; unknown values become none.",
+ "contractVersion": "1.0.0",
+ "kind": "graph",
+ "input": {
+  "osm": {
+   "osm3s": {
+    "timestamp_osm_base": "fixture"
+   },
+   "elements": [
+    {
+     "type": "node",
+     "id": 1,
+     "lat": 40.18,
+     "lon": 44.5
+    },
+    {
+     "type": "node",
+     "id": 2,
+     "lat": 40.18,
+     "lon": 44.5017637
+    },
+    {
+     "type": "node",
+     "id": 3,
+     "lat": 40.1809044,
+     "lon": 44.5017637
+    },
+    {
+     "type": "node",
+     "id": 4,
+     "lat": 40.18,
+     "lon": 44.5035273
+    },
+    {
+     "type": "node",
+     "id": 5,
+     "lat": 40.1790956,
+     "lon": 44.5017637
+    },
+    {
+     "type": "way",
+     "id": 701,
+     "nodes": [
+      1,
+      2
+     ],
+     "tags": {
+      "highway": "secondary",
+      "lanes": "3",
+      "turn:lanes:forward": "left|through|through;right",
+      "turn:lanes:backward": "left;through|right"
+     }
+    },
+    {
+     "type": "way",
+     "id": 702,
+     "nodes": [
+      2,
+      3
+     ],
+     "tags": {
+      "highway": "secondary",
+      "oneway": "yes",
+      "turn:lanes": "left|right"
+     }
+    },
+    {
+     "type": "way",
+     "id": 703,
+     "nodes": [
+      4,
+      2
+     ],
+     "tags": {
+      "highway": "secondary",
+      "oneway": "-1",
+      "turn:lanes": "through|weird_value"
+     }
+    },
+    {
+     "type": "way",
+     "id": 704,
+     "nodes": [
+      2,
+      5
+     ],
+     "tags": {
+      "highway": "residential",
+      "turn:lanes": "left|right"
+     }
+    }
+   ]
+  },
+  "zone": {
+   "type": "polygon",
+   "coordinates": [
+    [
+     44.4994121,
+     40.1786434
+    ],
+    [
+     44.5041152,
+     40.1786434
+    ],
+    [
+     44.5041152,
+     40.1813566
+    ],
+    [
+     44.4994121,
+     40.1813566
+    ]
+   ]
+  },
+  "policies": [],
+  "start": null
+ },
+ "expected": {
+  "graph": {
+   "contentHash": "25ccffc2934d3046abf3f5b0c40c0ee4a26ba76bada566a164603315f32df6cd",
+   "graphId": "g-25ccffc2934d3046",
+   "nodeCount": 5,
+   "edgeCount": 6,
+   "restrictionCount": 0,
+   "edgeIds": [
+    "osm:w701:n1-n2:b",
+    "osm:w701:n1-n2:f",
+    "osm:w702:n2-n3:f",
+    "osm:w703:n4-n2:b",
+    "osm:w704:n2-n5:b",
+    "osm:w704:n2-n5:f"
+   ],
+   "eligibility": {
+    "osm:w701:n1-n2:b": "eligible",
+    "osm:w701:n1-n2:f": "eligible",
+    "osm:w702:n2-n3:f": "eligible",
+    "osm:w703:n4-n2:b": "eligible",
+    "osm:w704:n2-n5:b": "eligible",
+    "osm:w704:n2-n5:f": "eligible"
+   },
+   "eligibilityReason": {},
+   "turnLanes": {
+    "osm:w701:n1-n2:b": "left;through|right",
+    "osm:w701:n1-n2:f": "left|through|through;right",
+    "osm:w702:n2-n3:f": "left|right",
+    "osm:w703:n4-n2:b": "through|none"
+   },
+   "nodePassage": {},
+   "restrictions": []
+  },
+  "requirements": [
+   {
+    "requirementId": "osm:w701:n1-n2:b#0",
+    "edgeId": "osm:w701:n1-n2:b",
+    "start": 0,
+    "end": 149.84,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w701:n1-n2:f#0",
+    "edgeId": "osm:w701:n1-n2:f",
+    "start": 0,
+    "end": 149.84,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w702:n2-n3:f#0",
+    "edgeId": "osm:w702:n2-n3:f",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w703:n4-n2:b#0",
+    "edgeId": "osm:w703:n4-n2:b",
+    "start": 0,
+    "end": 149.83,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w704:n2-n5:b#0",
+    "edgeId": "osm:w704:n2-n5:b",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   },
+   {
+    "requirementId": "osm:w704:n2-n5:f#0",
+    "edgeId": "osm:w704:n2-n5:f",
+    "start": 0,
+    "end": 100.57,
+    "status": "unvisited"
+   }
+  ],
+  "plans": {},
+  "paths": {},
+  "tracks": {}
+ },
+ "assertions": [
+  {
+   "kind": "turn_lanes",
+   "edgeId": "osm:w701:n1-n2:f",
+   "value": "left|through|through;right"
+  },
+  {
+   "kind": "turn_lanes",
+   "edgeId": "osm:w701:n1-n2:b",
+   "value": "left;through|right"
+  },
+  {
+   "kind": "turn_lanes",
+   "edgeId": "osm:w702:n2-n3:f",
+   "value": "left|right"
+  },
+  {
+   "kind": "turn_lanes",
+   "edgeId": "osm:w703:n4-n2:b",
+   "value": "through|none"
+  },
+  {
+   "kind": "turn_lanes",
+   "edgeId": "osm:w704:n2-n5:f",
+   "value": null
+  }
+ ],
+ "tolerances": {
+  "offsetMeters": 0.5,
+  "totalsMeters": 1
+ }
+}

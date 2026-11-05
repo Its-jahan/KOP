@@ -26,16 +26,17 @@ async function mapClick(page: Page, x: number, y: number) {
     return { x: p.x, y: p.y };
   }, [lon, lat]);
   const box = (await page.getByTestId('map').boundingBox())!;
+  if (process.env.DBG) console.log('click', x, y, JSON.stringify(px), await page.evaluate(([a, b]) => { const e = document.elementFromPoint(a, b); return e ? e.className : 'none'; }, [box.x + px.x, box.y + px.y]), await page.evaluate(() => JSON.stringify((window as unknown as { __coverageMap: { map: { getCenter: () => unknown; getZoom: () => number } } }).__coverageMap.map.getCenter())));
   await page.mouse.click(box.x + px.x, box.y + px.y);
 }
 
 async function setup(page: Page) {
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-  await page.getByRole('button', { name: 'تنظیمات' }).click();
+  await page.getByTestId('menu').click();
   await page.getByRole('button', { name: 'English' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
-  await page.getByRole('button', { name: 'Prepare' }).click();
+  await page.locator('.scrim').click({ position: { x: 380, y: 400 } });
   await page.evaluate(() => (window as unknown as { __coverageMap: { map: { jumpTo: (o: object) => void } } }).__coverageMap.map.jumpTo({ center: [44.50118, 40.18045], zoom: 16 }));
   await page.waitForTimeout(400);
 }
@@ -70,17 +71,19 @@ test('zone validation: self-intersection, undo, circle radius limits', async ({ 
   await expect(page.getByTestId('zone-status')).toContainText('at least 20 m');
   await page.getByTestId('radius').fill('150');
   await expect(page.getByTestId('zone-status')).toContainText('Area');
-  await expect(page.getByTestId('start-driving')).toBeDisabled();
-  await expect(page.getByTestId('start-blockers')).toContainText('load the road network first');
+  await expect(page.getByTestId('load-roads')).toBeEnabled();
+  await page.getByTestId('radius').fill('5');
+  await expect(page.getByTestId('load-roads')).toBeDisabled();
 });
 
 test('provider quota error is a clear non-success state', async ({ context, page }) => {
   await mockNetwork(context, 429);
   await setup(page);
   for (const [x, y] of [[-30, -30], [230, -30], [230, 130]] as [number, number][]) await mapClick(page, x, y);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/quota.png' });
   await page.getByTestId('load-roads').click();
   await expect(page.getByTestId('graph-error')).toContainText('provider_quota_exceeded', { timeout: 30_000 });
-  await expect(page.getByTestId('start-driving')).toBeDisabled();
+  await expect(page.getByTestId('start-driving')).toHaveCount(0);
 });
 
 test('network loss while loading roads', async ({ context, page }) => {
@@ -134,7 +137,9 @@ test('full flow with simulated GPS: plan, drive, direction-sensitive progress, p
   await page.getByTestId('resume').click();
   await expect(page.getByTestId('gps-state')).not.toContainText('Paused');
   // sessions list shows exactly one session (no duplicate from double click)
-  await page.getByRole('button', { name: 'Sessions' }).click();
+  await page.getByTestId('more').click();
+  await page.getByTestId('more-menu').click();
+  await page.getByRole('button', { name: /Sessions/ }).click();
   await expect(page.locator('.sessions li')).toHaveCount(1);
   // export then import as a copy
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export' }).click()]);

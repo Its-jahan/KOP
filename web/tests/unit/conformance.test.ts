@@ -154,6 +154,9 @@ function checkAssertion(a: Record<string, unknown>, out: Out) {
       expect(out.graph.eligibility[a.edgeId as string]).toBe(a.value);
       if (a.reason) expect(out.graph.eligibilityReason[a.edgeId as string]).toBe(a.reason);
       break;
+    case 'turn_lanes':
+      expect((out.graph.turnLanes as Record<string, string>)[a.edgeId as string] ?? null).toBe(a.value);
+      break;
     case 'node_passage':
       expect((out.graph.nodePassage as Record<string, string>)[a.nodeId as string]).toBe(a.value);
       break;

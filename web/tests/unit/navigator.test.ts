@@ -59,3 +59,40 @@ describe('Navigator (turn-by-turn)', () => {
     expect(nav.compute(gi, plan, mans, starts, fix(50, 0, 90, 10, 120), 500, 0)).toBeNull();
   });
 });
+
+import { laneHints } from '../../src/core/navigator';
+
+describe('lane guidance', () => {
+  it('right turn: only lanes that allow a right turn are marked', () => {
+    const h = laneHints([['left'], ['through'], ['through', 'right']], 'right')!;
+    expect(h.map((x) => x.ok)).toEqual([false, false, true]);
+  });
+  it('left turn and straight on', () => {
+    expect(laneHints([['left'], ['left', 'through'], ['through', 'right']], 'left')!.map((x) => x.ok)).toEqual([true, true, false]);
+    expect(laneHints([['left'], ['through'], ['right']], 'continue')!.map((x) => x.ok)).toEqual([false, true, false]);
+  });
+  it('no advice when every lane works, nothing matches, or lanes are unmapped', () => {
+    expect(laneHints([['through', 'right'], ['through', 'right']], 'right')).toBeNull();
+    expect(laneHints([['left'], ['through']], 'right')).toBeNull();
+    expect(laneHints(undefined, 'right')).toBeNull();
+  });
+  it('navigator attaches lanes from the approaching road to the next maneuver', async () => {
+    // Approach road A(0,0)->B(150,0) has lanes; at B the route turns right (south) to C(150,-100).
+    const o2 = new Osm().node(1, 0, 0).node(2, 150, 0).node(3, 150, -100).node(4, 300, 0)
+      .way(1, [1, 2], { highway: 'secondary', oneway: 'yes', 'turn:lanes': 'left|through|through;right' })
+      .way(2, [2, 3], { highway: 'secondary', oneway: 'yes' }).way(3, [2, 4], { highway: 'secondary', oneway: 'yes' });
+    const g2 = await normalizeOverpass(o2.json(), { fetchedAt: 'x', providerId: 'fixture' });
+    const gi2 = new GraphIndex(g2);
+    const z2 = { type: 'polygon' as const, coordinates: [ll(-30, 30), ll(170, 30), ll(170, -130), ll(-30, -130)] };
+    const r2 = computeRequirements(gi2, z2);
+    const p2 = planCoverage({
+      gi: gi2, zoneInfo: r2.zoneInfo, requirements: r2.requirements, observed: new Map(), excluded: new Set(), policy: 'STRICT_INSIDE',
+      start: { edgeId: 'osm:w1:n1-n2:f', offsetMeters: 0, source: 'selected_start' },
+      meta: { planId: 'p2', graphHash: g2.contentHash, zoneVersion: 1, progressRevision: 0, planningRevision: 1, createdAt: 'x' },
+    });
+    expect(p2.steps.map((s) => s.edgeId)).toEqual(['osm:w1:n1-n2:f', 'osm:w2:n2-n3:f']);
+    const n = new Navigator().compute(gi2, p2, buildManeuvers(gi2, p2), stepStartDistances(p2), fix(80, 1, 90, 10), 500, 0)!;
+    expect(n.type).toBe('right');
+    expect(n.lanes!.map((l) => l.ok)).toEqual([false, false, true]);
+  });
+});

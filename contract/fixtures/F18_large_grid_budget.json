@@ -31556,6 +31556,7 @@
     "osm:w11739:n870-n900:f": "eligible"
    },
    "eligibilityReason": {},
+   "turnLanes": {},
    "nodePassage": {},
    "restrictions": []
   },

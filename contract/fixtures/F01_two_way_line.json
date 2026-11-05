@@ -1670,6 +1670,7 @@
     "osm:w10:n1-n2:f": "eligible"
    },
    "eligibilityReason": {},
+   "turnLanes": {},
    "nodePassage": {},
    "restrictions": []
   },

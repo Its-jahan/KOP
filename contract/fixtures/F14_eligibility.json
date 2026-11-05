@@ -258,6 +258,7 @@
     "osm:w208:n1-n5:b": "vehicle_limit_width",
     "osm:w208:n1-n5:f": "vehicle_limit_width"
    },
+   "turnLanes": {},
    "nodePassage": {
     "osm:n7": "blocked",
     "osm:n9": "unverified"

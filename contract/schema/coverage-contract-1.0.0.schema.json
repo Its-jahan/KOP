@@ -69,7 +69,12 @@
         "eligibility": { "$ref": "#/$defs/eligibility" },
         "eligibilityReason": { "$ref": "#/$defs/nullableString" },
         "dataConfidence": { "enum": ["high", "medium", "low"] },
-        "provenance": { "type": "string" }
+        "provenance": { "type": "string" },
+        "turnLanes": {
+          "description": "Lane turn indications in travel direction, left to right (OSM turn:lanes). Omitted when unmapped.",
+          "type": "array", "minItems": 1, "maxItems": 12,
+          "items": { "type": "array", "minItems": 1, "items": { "enum": ["left", "slight_left", "sharp_left", "through", "right", "slight_right", "sharp_right", "reverse", "merge_to_left", "merge_to_right", "none"] } }
+        }
       }
     },
     "turnRestriction": {

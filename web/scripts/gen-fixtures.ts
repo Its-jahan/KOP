@@ -340,6 +340,25 @@ const seg = (w: number, a: number, b: number, d: 'f' | 'b') => `osm:w${w}:n${a}-
   ]);
 }
 
+// F22 lane indications (turn:lanes) per travel direction
+{
+  const osm = new Osm().node(1, 0, 0).node(2, 150, 0).node(3, 150, 100).node(4, 300, 0).node(5, 150, -100)
+    .way(701, [1, 2], { highway: 'secondary', lanes: '3', 'turn:lanes:forward': 'left|through|through;right', 'turn:lanes:backward': 'left;through|right' })
+    .way(702, [2, 3], { highway: 'secondary', oneway: 'yes', 'turn:lanes': 'left|right' })
+    .way(703, [4, 2], { highway: 'secondary', oneway: '-1', 'turn:lanes': 'through|weird_value' })
+    .way(704, [2, 5], { highway: 'residential', 'turn:lanes': 'left|right' })
+    .json();
+  await emit('F22_turn_lanes', 'Lane indications per travel direction', 'turn:lanes:forward/backward map to the matching directed edge; plain turn:lanes only on one-way roads; unknown values become none.', {
+    osm, zone: { type: 'polygon', coordinates: rect(-50, -150, 350, 150) }, policies: [], start: null,
+  }, [
+    { kind: 'turn_lanes', edgeId: seg(701, 1, 2, 'f'), value: 'left|through|through;right' },
+    { kind: 'turn_lanes', edgeId: seg(701, 1, 2, 'b'), value: 'left;through|right' },
+    { kind: 'turn_lanes', edgeId: seg(702, 2, 3, 'f'), value: 'left|right' },
+    { kind: 'turn_lanes', edgeId: seg(703, 4, 2, 'b'), value: 'through|none' },
+    { kind: 'turn_lanes', edgeId: seg(704, 2, 5, 'f'), value: null },
+  ]);
+}
+
 // F12 stale planning response
 emitTable('F12_stale_plan_response', 'Stale planning response', 'A slow older result never replaces a newer plan.', 'decidePlan',
   [

@@ -151,6 +151,7 @@
     "osm:w303:n2-n4:b": "conditional_access",
     "osm:w303:n2-n4:f": "conditional_access"
    },
+   "turnLanes": {},
    "nodePassage": {},
    "restrictions": []
   },

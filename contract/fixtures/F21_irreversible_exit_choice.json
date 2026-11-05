@@ -183,6 +183,7 @@
     "osm:w606:n6-n7:f": "eligible"
    },
    "eligibilityReason": {},
+   "turnLanes": {},
    "nodePassage": {},
    "restrictions": []
   },
