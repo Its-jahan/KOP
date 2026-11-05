@@ -84,7 +84,62 @@ class MainActivity : ComponentActivity() {
         setContent {
             AppRoot(engine = engine, bridge = ui, actions = actions)
         }
+        // "Where am I" must always be visible: ask for location once at launch.
+        if (savedInstanceState == null && !hasFineLocation()) withLocationPermission { startPreviewLocation() }
     }
+
+    // ---- always-on foreground position (all screens); never credits coverage ----
+    private val previewListener = object : android.location.LocationListener {
+        override fun onLocationChanged(l: android.location.Location) {
+            engine.onPreviewFix(
+                l.longitude, l.latitude,
+                if (l.hasAccuracy()) l.accuracy.toDouble() else null,
+                if (l.hasSpeed()) l.speed.toDouble() else null,
+                if (l.hasBearing()) l.bearing.toDouble() else null,
+            )
+        }
+        override fun onProviderDisabled(provider: String) {
+            val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            if (lm.getProviders(true).isEmpty()) engine.onPreviewState("location_disabled")
+        }
+        override fun onProviderEnabled(provider: String) {}
+        @Deprecated("Deprecated in Java")
+        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startPreviewLocation() {
+        if (!hasFineLocation()) {
+            engine.onPreviewState("permission_denied")
+            return
+        }
+        val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        lm.removeUpdates(previewListener)
+        var any = false
+        for (p in listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)) {
+            if (!lm.allProviders.contains(p)) continue
+            try {
+                lm.requestLocationUpdates(p, 1000L, 0f, previewListener, android.os.Looper.getMainLooper())
+                lm.getLastKnownLocation(p)?.let { if (System.currentTimeMillis() - it.time < 120_000) previewListener.onLocationChanged(it) }
+                any = true
+            } catch (e: Exception) {
+                // provider unavailable on this unit
+            }
+        }
+        if (!any) engine.onPreviewState("location_disabled")
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (hasFineLocation()) startPreviewLocation()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        (getSystemService(Context.LOCATION_SERVICE) as LocationManager).removeUpdates(previewListener)
+    }
+
+    fun requestPreviewLocation() = withLocationPermission { startPreviewLocation() }
 
     private fun hasFineLocation() =
         ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -150,6 +205,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private val actions = object : AppActions {
+        override fun showMyLocation() {
+            if (hasFineLocation()) engine.centerOnMe() else requestPreviewLocation()
+        }
         override fun startNavigation() = withLocationPermission {
             lifecycleScope.launch {
                 if (engine.startSession() && !engine.isLabSession()) LocationService.start(this@MainActivity)
@@ -207,6 +265,8 @@ interface AppActions {
     fun export(includeObservations: Boolean, includeGraph: Boolean)
     fun import()
     fun setLanguage(lang: String)
+    /** Ask for location (if needed) and center the map on the current position. */
+    fun showMyLocation()
 }
 
 /** Lets the activity push transient messages into the Compose snackbar. */

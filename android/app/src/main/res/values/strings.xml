@@ -224,4 +224,7 @@
     <string name="voice_on">Voice on</string>
     <string name="voice_off">Voice off</string>
     <string name="overview">Overview</string>
+    <string name="my_location">My location</string>
+    <string name="you_are_here">You are here</string>
+    <string name="locating">Finding your location…</string>
 </resources>
