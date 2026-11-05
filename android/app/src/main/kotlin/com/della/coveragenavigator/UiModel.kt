@@ -128,6 +128,9 @@ data class DriveInfo(
     val voiceOn: Boolean = true,
 )
 
+/** Always-on "where am I" (all screens), independent of coverage crediting. */
+data class MyLocation(val lon: Double, val lat: Double, val accuracy: Double?, val heading: Double?, val atMs: Long)
+
 data class OutsideApproval(val newOutsideMeters: Double, val approvedOutsideMeters: Double)
 
 data class MapLayers(
@@ -169,4 +172,7 @@ data class UiState(
     val startBlockers: List<Int> = emptyList(),
     val labMode: Boolean = false,
     val busy: Boolean = false,
+    val myLocation: MyLocation? = null,
+    /** idle | active | permission_denied | location_disabled */
+    val myLocationState: String = "idle",
 )

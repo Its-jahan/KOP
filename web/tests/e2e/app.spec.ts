@@ -203,3 +203,30 @@ test('off-road start is rejected; tab hide records an unverified gap; wake-lock 
   });
   await expect(page.getByTestId('drive-panel')).toContainText('Unverified gap recorded');
 });
+
+test('position is always shown and the driving banner gives turn-by-turn directions', async ({ context, page }) => {
+  await mockNetwork(context);
+  await context.grantPermissions(['geolocation']);
+  // Start away from the planned start: on the far end of the grid.
+  const [lon0, lat0] = ll(200, 50);
+  await context.setGeolocation({ longitude: lon0, latitude: lat0, accuracy: 8 });
+  await setup(page);
+  // before any session: "you are here" is shown
+  await expect(page.getByTestId('where-chip')).toContainText('You are here');
+  await drawZoneAndLoad(page);
+  await chooseStartAndPlan(page);
+  await page.getByTestId('start-driving').click();
+  await context.setGeolocation({ longitude: lon0 + 0.0000001, latitude: lat0, accuracy: 8 });
+  const banner = page.getByTestId('nav-banner');
+  await expect(banner).toBeVisible({ timeout: 15_000 });
+  await expect(banner).toContainText(/\d+ m/);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/nav.png' });
+  // drive onto the route start; the banner keeps guiding
+  for (const [x, y] of [[200, 30], [200, 10], [190, 0], [170, 0], [150, 0]] as [number, number][]) {
+    const [lon, lat] = ll(x, y);
+    await context.setGeolocation({ longitude: lon, latitude: lat, accuracy: 6 });
+    await page.waitForTimeout(1050);
+  }
+  await expect(banner).toBeVisible();
+  await expect(page.getByTestId('where-chip')).toContainText('You are here');
+});

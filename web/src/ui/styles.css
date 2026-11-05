@@ -72,3 +72,22 @@ bdi { unicode-bidi: isolate; }
   .panel { width: 100%; flex: 1 1 45%; border-inline-start: none; border-top: 1px solid var(--line); padding-inline: 16px; }
   .layout.tab-drive .map { flex-basis: 62%; }
 }
+.map-wrap { flex: 1; position: relative; min-height: 0; display: flex; }
+.map-wrap .map { position: absolute; inset: 0; }
+.map-buttons { position: absolute; bottom: 150px; inset-inline-end: 10px; display: flex; flex-direction: column; gap: 8px; z-index: 5; }
+.map-btn { width: 52px; height: 52px; border-radius: 50%; font-size: 1.5rem; background: #fff; color: #1c7ed6; box-shadow: 0 2px 6px rgba(0,0,0,.3); padding: 0; }
+.map-btn.on { background: #1c7ed6; color: #fff; }
+.where-chip { position: absolute; bottom: 36px; inset-inline-start: 8px; background: rgba(255,255,255,.92); color: #212529; border-radius: 10px; padding: 4px 10px; font-size: .9rem; z-index: 5; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
+.nav-banner { position: absolute; top: 8px; inset-inline: 8px; max-width: 620px; background: #1b5e20; color: #fff; border-radius: 16px; padding: 10px 16px; z-index: 6; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+.nav-main { display: flex; align-items: center; gap: 14px; }
+.nav-glyph { font-size: 3.6rem; line-height: 1; display: inline-block; }
+.nav-dist { font-size: 2.2rem; font-weight: 700; line-height: 1.1; }
+.nav-act { font-size: 1.3rem; font-weight: 600; }
+.nav-road { font-size: 1.1rem; color: #e8f5e9; }
+.nav-sub { color: #c8e6c9; margin-top: 4px; }
+.nav-then { margin-top: 6px; background: rgba(0,0,0,.2); border-radius: 8px; padding: 4px 8px; font-size: 1.05rem; display: inline-block; }
+.nav-approx { color: #ffe082; font-size: .9rem; }
+@media (max-width: 760px), (orientation: portrait) {
+  .map-wrap { flex: 1 1 55%; min-height: 300px; }
+  .layout.tab-drive .map-wrap { flex-basis: 66%; }
+}

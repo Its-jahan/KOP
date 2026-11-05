@@ -207,6 +207,39 @@ class Engine(private val appContext: Context, private val store: Store) {
     fun setTapMode(m: TapMode) = post { _ui.update { it.copy(tapMode = m) } }
     fun setFollow(f: Boolean) = post { _ui.update { it.copy(follow = f) } }
 
+    private var centeredOnMe = false
+    private var myHeading: Double? = null
+
+    /** Foreground "where am I" fix (all screens). Never credits coverage. */
+    fun onPreviewFix(lon: Double, lat: Double, accuracy: Double?, speed: Double?, bearing: Double?) = post {
+        if (speed != null && speed >= 2.5 && bearing != null) myHeading = bearing
+        val me = MyLocation(lon, lat, accuracy, myHeading, SystemClock.elapsedRealtime())
+        val driving = active?.progress?.status == "active"
+        _ui.update { st ->
+            var cam = st.camera
+            if (!centeredOnMe && st.screen == Screen.PREPARE && st.zone.vertices.isEmpty() && st.zone.circleCenter == null) {
+                centeredOnMe = true
+                val d = 0.004
+                cam = CameraCmd(++cameraSeq, lat - d, lon - d, lat + d, lon + d, 16.0)
+            }
+            st.copy(
+                myLocation = me, myLocationState = "active", camera = cam,
+                // while a session is actively driving, the drive publisher owns the marker
+                layers = if (driving) st.layers else st.layers.copy(location = GeoJson.location(LonLat(lon, lat), accuracy, (accuracy ?: 99.0) <= 25, myHeading)),
+            )
+        }
+    }
+
+    fun onPreviewState(state: String) = post { _ui.update { it.copy(myLocationState = state) } }
+
+    /** Center the map on the current position (and resume following while driving). */
+    fun centerOnMe() = post {
+        val me = _ui.value.myLocation ?: return@post
+        val d = 0.0012
+        val driving = active?.progress?.status == "active"
+        _ui.update { it.copy(follow = true, camera = CameraCmd(++cameraSeq, me.lat - d, me.lon - d, me.lat + d, me.lon + d, if (driving) 17.5 else 17.0, bearing = if (driving) (me.heading ?: 0.0) else null, tilt = if (driving) 45.0 else null, follow = driving)) }
+    }
+
     private val voice by lazy { Voice(appContext) }
     fun setVoice(on: Boolean) = post {
         _ui.update { it.copy(drive = it.drive.copy(voiceOn = on)) }
@@ -751,7 +784,11 @@ class Engine(private val appContext: Context, private val store: Store) {
         if (a.pendingWrites.isNotEmpty() && !commit(a, emptyList())) return@post
         retire(a)
         active = null
-        _ui.update { it.copy(screen = Screen.PREPARE, drive = DriveInfo(), layers = it.layers.copy(visited = GeoJson.EMPTY, location = GeoJson.EMPTY)) }
+        _ui.update { st ->
+            val me = st.myLocation
+            st.copy(screen = Screen.PREPARE, drive = DriveInfo(), layers = st.layers.copy(visited = GeoJson.EMPTY, ahead = GeoJson.EMPTY,
+                location = if (me != null) GeoJson.location(LonLat(me.lon, me.lat), me.accuracy, (me.accuracy ?: 99.0) <= 25, me.heading) else GeoJson.EMPTY))
+        }
         publishPrepared(_ui.value.graph.attempts)
     }
 
@@ -986,7 +1023,12 @@ class Engine(private val appContext: Context, private val store: Store) {
         val (metrics, statuses) = computeMetrics(a.req.requirements, a.progress)
         val gps = gpsInfo(a)
         val f = a.lastFix
-        val loc = if (f != null && a.progress.status == "active") GeoJson.location(LonLat(f.lon, f.lat), f.horizontalAccuracyMeters, gps.state == "reliable", a.lastHeading) else GeoJson.EMPTY
+        val me = _ui.value.myLocation
+        val loc = when {
+            f != null && a.progress.status == "active" -> GeoJson.location(LonLat(f.lon, f.lat), f.horizontalAccuracyMeters, gps.state == "reliable", a.lastHeading)
+            me != null -> GeoJson.location(LonLat(me.lon, me.lat), me.accuracy, (me.accuracy ?: 99.0) <= 25, me.heading)
+            else -> GeoJson.EMPTY
+        }
         val plan = a.plan
         var layers = _ui.value.layers.copy(location = loc)
         if (forceMap) {

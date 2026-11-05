@@ -271,6 +271,7 @@ fun PrepareScreen(state: UiState, engine: Engine, actions: AppActions) {
                     onTap = { engine.mapTap(it) }, onVertexMoved = { i, p, f -> engine.moveVertex(i, p, f) }, onUserPan = {},
                     modifier = Modifier.fillMaxSize(),
                 )
+                WhereAmI(state, actions, Modifier.align(Alignment.BottomEnd).padding(bottom = 28.dp, end = 8.dp))
                 Text(
                     stringResource(if (state.tapMode == TapMode.ZONE) R.string.tap_hint_zone else R.string.tap_hint_start),
                     modifier = Modifier.align(Alignment.TopStart).padding(8.dp).background(Color(0xCC000000), RoundedCornerShape(6.dp)).padding(8.dp),
@@ -462,6 +463,7 @@ fun DriveScreen(state: UiState, engine: Engine, actions: AppActions) {
         Column(Modifier.align(Alignment.TopStart).padding(8.dp).widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             NavBanner(d)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                SmallButton("◎ " + stringResource(R.string.my_location)) { actions.showMyLocation() }
                 GpsChip(d.gps)
                 SmallButton(stringResource(if (d.voiceOn) R.string.voice_on else R.string.voice_off)) { engine.setVoice(!d.voiceOn) }
                 if (!state.follow && d.status == "active") SmallButton(stringResource(R.string.recenter)) { engine.setFollow(true) }
@@ -537,6 +539,24 @@ private fun GpsChip(g: GpsInfo) {
         color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold,
         modifier = Modifier.background(color, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
     )
+}
+
+/** "You are here" chip + my-location button, shown on the map in every screen. */
+@Composable
+private fun WhereAmI(state: UiState, actions: AppActions, modifier: Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Surface(shape = RoundedCornerShape(28.dp), color = Color(0xFF1E88E5), shadowElevation = 6.dp, modifier = Modifier.clickable { actions.showMyLocation() }) {
+            Text("◎", color = Color.White, fontSize = 28.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        }
+        val me = state.myLocation
+        val text = when {
+            me != null -> stringResource(R.string.you_are_here) + (me.accuracy?.let { String.format(Locale.getDefault(), " · ±%.0f m", it) } ?: "")
+            state.myLocationState == "permission_denied" -> stringResource(R.string.gps_permission_denied)
+            state.myLocationState == "location_disabled" -> stringResource(R.string.gps_location_disabled)
+            else -> stringResource(R.string.locating)
+        }
+        Text(text, color = Color.Black, fontSize = 14.sp, modifier = Modifier.background(Color(0xEEFFFFFF), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp))
+    }
 }
 
 /** Big turn-by-turn banner: what to do next, how far, and onto which street. */

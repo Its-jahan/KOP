@@ -224,4 +224,7 @@
     <string name="voice_on">صدا روشن</string>
     <string name="voice_off">صدا خاموش</string>
     <string name="overview">نمای کلی</string>
+    <string name="my_location">موقعیت من</string>
+    <string name="you_are_here">شما اینجا هستید</string>
+    <string name="locating">در حال پیدا کردن موقعیت شما…</string>
 </resources>
