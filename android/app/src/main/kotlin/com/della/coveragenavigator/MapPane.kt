@@ -45,7 +45,8 @@ val MAP_STYLE = """
     "coverage": {"type": "geojson", "data": $EMPTY_FC},
     "visited": {"type": "geojson", "data": $EMPTY_FC},
     "markers": {"type": "geojson", "data": $EMPTY_FC},
-    "location": {"type": "geojson", "data": $EMPTY_FC}
+    "location": {"type": "geojson", "data": $EMPTY_FC},
+    "ahead": {"type": "geojson", "data": $EMPTY_FC}
   },
   "layers": [
     {"id": "osm", "type": "raster", "source": "osm"},
@@ -76,10 +77,20 @@ val MAP_STYLE = """
     {"id": "marker-snapped-dir", "type": "symbol", "source": "markers", "filter": ["==", ["get", "kind"], "snapped"],
      "layout": {"icon-image": "arrow", "icon-size": 1.1, "icon-rotate": ["-", ["get", "bearing"], 90],
                 "icon-rotation-alignment": "map", "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-offset": [26, 0]}},
+    {"id": "ahead-casing", "type": "line", "source": "ahead", "layout": {"line-cap": "round", "line-join": "round"},
+     "paint": {"line-color": "#0D47A1", "line-width": ["interpolate", ["linear"], ["zoom"], 13, 7, 18, 20]}},
+    {"id": "ahead-line", "type": "line", "source": "ahead", "layout": {"line-cap": "round", "line-join": "round"},
+     "paint": {"line-color": "#42A5F5", "line-width": ["interpolate", ["linear"], ["zoom"], 13, 4, 18, 14]}},
+    {"id": "ahead-arrows", "type": "symbol", "source": "ahead",
+     "layout": {"symbol-placement": "line", "symbol-spacing": 80, "icon-image": "arrow", "icon-size": 0.7,
+                "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-rotation-alignment": "map", "icon-keep-upright": false}},
     {"id": "location-acc", "type": "circle", "source": "location",
      "paint": {"circle-radius": 16, "circle-color": ["case", ["==", ["get", "reliable"], true], "#1E88E5", "#FB8C00"], "circle-opacity": 0.25}},
-    {"id": "location", "type": "circle", "source": "location",
-     "paint": {"circle-radius": 8, "circle-color": ["case", ["==", ["get", "reliable"], true], "#1E88E5", "#FB8C00"], "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 3}}
+    {"id": "location", "type": "circle", "source": "location", "filter": ["<", ["get", "bearing"], 0],
+     "paint": {"circle-radius": 10, "circle-color": ["case", ["==", ["get", "reliable"], true], "#1E88E5", "#FB8C00"], "circle-stroke-color": "#FFFFFF", "circle-stroke-width": 3}},
+    {"id": "location-heading", "type": "symbol", "source": "location", "filter": [">=", ["get", "bearing"], 0],
+     "layout": {"icon-image": "vehicle", "icon-size": 1.0, "icon-rotate": ["get", "bearing"], "icon-rotation-alignment": "map",
+                "icon-allow-overlap": true, "icon-ignore-placement": true}}
   ]
 }
 """.trimIndent()
@@ -101,7 +112,25 @@ private fun arrowBitmap(): Bitmap {
     return bmp
 }
 
+private fun vehicleBitmap(): Bitmap {
+    val size = 72
+    @Suppress("UseKtx")
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val c = Canvas(bmp)
+    val path = Path().apply {
+        moveTo(size * 0.5f, size * 0.06f)
+        lineTo(size * 0.88f, size * 0.9f)
+        lineTo(size * 0.5f, size * 0.7f)
+        lineTo(size * 0.12f, size * 0.9f)
+        close()
+    }
+    c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(30, 136, 229); style = Paint.Style.FILL })
+    c.drawPath(path, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = 6f })
+    return bmp
+}
+
 private class MapHolder {
+    var driveStyled: Boolean? = null
     var map: MapLibreMap? = null
     var style: Style? = null
     val applied = HashMap<String, String>()
@@ -124,6 +153,7 @@ private class MapHolder {
         apply("visited", layers.visited)
         apply("markers", layers.markers)
         apply("location", layers.location)
+        apply("ahead", layers.ahead)
     }
 }
 
@@ -138,6 +168,8 @@ fun MapPane(
     onVertexMoved: (Int, LonLat, Boolean) -> Unit,
     onUserPan: () -> Unit,
     modifier: Modifier = Modifier,
+    /** While driving: de-emphasise the coverage network so the guided route stands out. */
+    driving: Boolean = false,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -167,6 +199,7 @@ fun MapPane(
                 })
                 map.setStyle(Style.Builder().fromJson(MAP_STYLE)) { style ->
                     style.addImage("arrow", arrowBitmap())
+                    style.addImage("vehicle", vehicleBitmap())
                     holder.style = style
                     holder.applied.clear()
                     holder.applyLayers()
@@ -240,10 +273,27 @@ fun MapPane(
     AndroidView(factory = { mapView }, modifier = modifier, update = {
         holder.latest = layers
         holder.applyLayers()
+        val st = holder.style
+        if (st != null && st.isFullyLoaded && holder.driveStyled != driving) {
+            holder.driveStyled = driving
+            val op = if (driving) 0.45f else 1.0f
+            st.getLayer("coverage-line")?.setProperties(org.maplibre.android.style.layers.PropertyFactory.lineOpacity(op))
+            st.getLayer("visited-line")?.setProperties(org.maplibre.android.style.layers.PropertyFactory.lineOpacity(op))
+            st.getLayer("coverage-arrows")?.setProperties(org.maplibre.android.style.layers.PropertyFactory.visibility(if (driving) "none" else "visible"))
+            st.getLayer("plan-line")?.setProperties(org.maplibre.android.style.layers.PropertyFactory.lineOpacity(if (driving) 0.18f else 0.28f))
+        }
         val map = holder.map
         if (map != null && camera != null && camera.id != holder.lastCamera) {
             holder.lastCamera = camera.id
-            if (camera.zoom != null) {
+            if (camera.follow) {
+                val h = mapView.height.toDouble()
+                val pos = org.maplibre.android.camera.CameraPosition.Builder()
+                    .target(LatLng((camera.south + camera.north) / 2, (camera.west + camera.east) / 2))
+                    .zoom(camera.zoom ?: 17.5).bearing(camera.bearing ?: 0.0).tilt(camera.tilt ?: 0.0)
+                    .padding(0.0, h * 0.45, 0.0, 0.0) // vehicle in the lower part of the screen
+                    .build()
+                map.animateCamera(CameraUpdateFactory.newCameraPosition(pos), 900)
+            } else if (camera.zoom != null) {
                 map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng((camera.south + camera.north) / 2, (camera.west + camera.east) / 2), camera.zoom), 600)
             } else {
                 val b = LatLngBounds.from(camera.north, camera.east, camera.south, camera.west)

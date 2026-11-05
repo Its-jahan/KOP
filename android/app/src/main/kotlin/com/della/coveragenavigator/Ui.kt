@@ -3,6 +3,7 @@
 package com.della.coveragenavigator
 
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -456,11 +457,15 @@ fun DriveScreen(state: UiState, engine: Engine, actions: AppActions) {
         MapPane(
             layers = state.layers, camera = state.camera, vertices = emptyList(), dragEnabled = false,
             onTap = {}, onVertexMoved = { _, _, _ -> }, onUserPan = { if (state.follow) engine.setFollow(false) },
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize(), driving = true,
         )
-        Column(Modifier.align(Alignment.TopStart).padding(8.dp).widthIn(max = 520.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            GpsChip(d.gps)
-            GuidanceCard(d)
+        Column(Modifier.align(Alignment.TopStart).padding(8.dp).widthIn(max = 640.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            NavBanner(d)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                GpsChip(d.gps)
+                SmallButton(stringResource(if (d.voiceOn) R.string.voice_on else R.string.voice_off)) { engine.setVoice(!d.voiceOn) }
+                if (!state.follow && d.status == "active") SmallButton(stringResource(R.string.recenter)) { engine.setFollow(true) }
+            }
         }
         Text(
             stringResource(R.string.osm_attribution),
@@ -491,7 +496,6 @@ fun DriveScreen(state: UiState, engine: Engine, actions: AppActions) {
                         "paused" -> BigButton(stringResource(R.string.resume), color = Color(0xFF2E7D32)) { actions.resume() }
                     }
                     if (d.status == "active") BigButton(stringResource(R.string.report_blocked), color = Color(0xFF6D4C41)) { engine.reportBlocked() }
-                    if (!state.follow && d.status == "active") SmallButton(stringResource(R.string.recenter)) { engine.setFollow(true) }
                 }
                 Spacer(Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -533,6 +537,51 @@ private fun GpsChip(g: GpsInfo) {
         color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold,
         modifier = Modifier.background(color, RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
     )
+}
+
+/** Big turn-by-turn banner: what to do next, how far, and onto which street. */
+@Composable
+private fun NavBanner(d: DriveInfo) {
+    val n = d.nav
+    val green = Color(0xFF1B5E20)
+    if (n == null || d.status != "active" || d.replanning) {
+        GuidanceCard(d)
+        return
+    }
+    Surface(shape = RoundedCornerShape(16.dp), color = green, shadowElevation = 8.dp) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val glyph = when (n.mode) {
+                    "to_road" -> "➤"
+                    else -> if (n.type == "join") "⤴" else maneuverGlyph(n.type)
+                }
+                val rot = if (n.mode == "to_road") ((n.relativeBearing ?: n.headBearing ?: 0.0) - 90.0).toFloat() else 0f
+                Text(glyph, fontSize = 64.sp, color = Color.White, modifier = Modifier.padding(end = 16.dp).graphicsLayer { rotationZ = rot })
+                Column {
+                    Text(fmtMeters(n.distanceMeters), fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    val action = when {
+                        n.mode == "to_road" -> stringResource(R.string.nav_head_to_road)
+                        n.type == "join" -> stringResource(R.string.nav_join_route)
+                        n.type == "turnaround" && n.turnaroundVerified != true -> stringResource(R.string.voice_turnaround_if_safe)
+                        else -> maneuverText(n.type)
+                    }
+                    Text(action, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                    n.roadName?.let { Text(stringResource(R.string.nav_onto, it), fontSize = 20.sp, color = Color(0xFFE8F5E9)) }
+                }
+            }
+            if (n.mode == "approach") {
+                Text(stringResource(R.string.nav_go_to_route) + " · " + stringResource(R.string.nav_to_route_remaining, fmtMeters(n.rejoinMeters ?: 0.0)), color = Color(0xFFC8E6C9), fontSize = 16.sp)
+            }
+            if (n.thenType != null && n.thenDistanceMeters != null && n.thenDistanceMeters < 400) {
+                Text(
+                    stringResource(R.string.nav_then) + ": " + (if (n.thenType == "join") stringResource(R.string.nav_join_route) else maneuverGlyph(n.thenType) + " " + maneuverText(n.thenType)) + (n.thenRoadName?.let { " · $it" } ?: ""),
+                    color = Color.White, fontSize = 18.sp,
+                    modifier = Modifier.padding(top = 6.dp).background(Color(0x33000000), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+            if (n.approximate) Text(stringResource(R.string.nav_approximate), color = Color(0xFFFFE082), fontSize = 14.sp)
+        }
+    }
 }
 
 @Composable
