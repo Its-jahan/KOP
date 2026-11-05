@@ -309,3 +309,36 @@ test('monthly plan: daily routes, drive a day, confirm at the end of the day, re
   expect(await page.locator('.days li').count()).toBeLessThanOrEqual(daysBefore);
   if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/campaign.png' });
 });
+
+test('street set import: only the listed street is required, then a monthly plan uses it', async ({ context, page }) => {
+  await mockNetwork(context);
+  await context.grantPermissions(['geolocation']);
+  const [lon0, lat0] = ll(0, 0);
+  await context.setGeolocation({ longitude: lon0, latitude: lat0, accuracy: 5 });
+  await setup(page);
+  await drawZoneAndLoad(page);
+  const full = await page.getByTestId('graph-stats').innerText();
+  await page.getByTestId('menu').click();
+  await page.getByTestId('menu-campaign').click();
+  await expect(page.getByTestId('street-sets')).toBeVisible();
+  const set = {
+    type: 'FeatureCollection',
+    features: [
+      { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[ll(-30, -30), ll(230, -30), ll(230, 130), ll(-30, 130), ll(-30, -30)]] } },
+      { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [ll(0, 0), ll(200, 0)] } },
+    ],
+  };
+  await page.locator('[data-testid="street-sets"] input[type=file]').setInputFiles({ name: 'main-street.geojson', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(set)) });
+  await expect(page.getByTestId('street-set')).toContainText('main-street');
+  await expect(page.getByTestId('graph-stats')).toContainText('Road network loaded');
+  const only = await page.getByTestId('graph-stats').innerText();
+  expect(only).not.toEqual(full);
+  await page.getByTestId('pick-start').click();
+  await mapClick(page, 10, 2);
+  await page.getByTestId('confirm-start').click();
+  await page.getByTestId('menu').click();
+  await page.getByTestId('menu-campaign').click();
+  await page.getByTestId('campaign-create-btn').click();
+  await expect(page.getByTestId('campaign')).toContainText('main-street');
+  await expect(page.getByTestId('campaign-day-1')).toBeVisible();
+});

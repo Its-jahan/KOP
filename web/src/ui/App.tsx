@@ -24,6 +24,7 @@ import type { LocationObservation } from '../core/types';
 import { CampaignPage, type CampaignContext, type PendingReview } from './CampaignPage';
 import type { Campaign, CampaignPlan } from '../core/campaign';
 import { buildLegs, computeTotals } from '../core/planner';
+import { filterRequirementsByStreets, parseStreetSet, type StreetSet } from '../core/streets';
 import type { Interval } from '../core/intervals';
 
 export const APP_VERSION = '0.1.0';
@@ -78,6 +79,8 @@ export function App() {
   const [planning, setPlanning] = useState(false);
   const [approveOutside, setApproveOutside] = useState(false);
   const [zoneVersion, setZoneVersion] = useState(1);
+  const [streetSet, setStreetSet] = useState<StreetSet | null>(null);
+  const [autoLoad, setAutoLoad] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const driveEngineRef = useRef<Engine | null>(null);
   const releaseLockRef = useRef<(() => void) | null>(null);
@@ -142,6 +145,9 @@ export function App() {
     return { type: 'circle', center: circle.center, radiusMeters: circle.radius, approximation: circleApproximation(circle.center, circle.radius) };
   }, [zoneMode, poly, circle]);
   const zoneVal: ZoneValidation | null = useMemo(() => (zoneDef ? validateZone(zoneDef) : null), [zoneDef]);
+  useEffect(() => {
+    if (streetSet && (zoneMode !== 'polygon' || poly !== streetSet.ring)) setStreetSet(null);
+  }, [poly, zoneMode, streetSet]);
 
   const invalidatePrepared = useCallback(() => {
     setPrepared(null);
@@ -163,7 +169,7 @@ export function App() {
     });
     if (zoneMode === 'polygon') {
       mv.setCenterHandle(null, () => undefined);
-      mv.setVertexHandles(poly, (i, p) => {
+      mv.setVertexHandles(streetSet ? [] : poly, (i, p) => {
         setPoly((old) => old.map((q, k) => (k === i ? p : q)));
         invalidatePrepared();
       });
@@ -174,7 +180,7 @@ export function App() {
         invalidatePrepared();
       });
     }
-  }, [poly, circle, zoneMode, tab, invalidatePrepared]);
+  }, [poly, circle, zoneMode, tab, invalidatePrepared, streetSet]);
 
   // map click routing
   useEffect(() => {
@@ -216,6 +222,7 @@ export function App() {
       if (r.graph.directedEdges.length > MAX_EDGES) throw new GraphFetchError({ kind: 'graph_too_large', edges: r.graph.directedEdges.length, limit: MAX_EDGES }, 'too large');
       const gi = new GraphIndex(r.graph);
       const req = computeRequirements(gi, zoneDef);
+      if (streetSet) req.requirements = filterRequirementsByStreets(gi, req.requirements, streetSet.lines);
       const rq = await engineRef.current.call<'requirements'>({ type: 'requirements', zone: zoneDef, policy });
       setPrepared({ graph: r.graph, gi, zoneInfo: req.zoneInfo, requirements: req.requirements, mainIds: new Set(rq.mainComponentEdgeIds) });
       setGraphState({ kind: 'available', graph: r.graph, endpoint, ms: performance.now() - t0 });
@@ -228,6 +235,41 @@ export function App() {
       if (ctl.signal.aborted) return;
       const failure = e instanceof GraphFetchError ? e.failure : { kind: 'graph_network_error' as const };
       setGraphState({ kind: 'failed', outcome: mapFailure(failure), message: (e as Error).message });
+    }
+  }
+
+  function applyStreetSet(s: StreetSet) {
+    abortRef.current?.abort();
+    setZoneMode('polygon');
+    setPoly(s.ring);
+    setStreetSet(s);
+    invalidatePrepared();
+    setGraphState({ kind: 'none' });
+    setTab('prepare');
+    setSheetOpen(false);
+    const b = bboxOf(s.ring);
+    mapRef.current?.fitBbox([b.west, b.south, b.east, b.north], 15);
+    setAutoLoad(true);
+  }
+  useEffect(() => {
+    if (!autoLoad || !streetSet || poly !== streetSet.ring || !zoneVal?.ok) return;
+    setAutoLoad(false);
+    void loadRoads();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLoad, streetSet, poly, zoneVal]);
+  async function loadPreset(file: string) {
+    try {
+      const res = await fetch(`${import.meta.env.BASE_URL}presets/${file}`);
+      applyStreetSet(parseStreetSet(await res.json(), file));
+    } catch (e) {
+      setToast(`${t.streetSetFailed}: ${(e as Error).message}`);
+    }
+  }
+  async function importStreetSet(f: File) {
+    try {
+      applyStreetSet(parseStreetSet(JSON.parse(await f.text()), f.name.replace(/\.[^.]+$/, '')));
+    } catch (e) {
+      setToast(`${t.streetSetFailed}: ${(e as Error).message}`);
     }
   }
 
@@ -514,6 +556,7 @@ export function App() {
         if (!graph || cancelled) return;
         const gi = new GraphIndex(graph);
         const req = computeRequirements(gi, campaign.zone);
+        if (campaign.streetSet) req.requirements = filterRequirementsByStreets(gi, req.requirements, campaign.streetSet.lines);
         setCampaignCtx({ graph, gi, zoneInfo: req.zoneInfo, requirements: req.requirements });
       }
       // End-of-day review: the newest campaign session not yet confirmed.
@@ -549,6 +592,7 @@ export function App() {
       graphId: prepared.graph.graphId, contentHash: prepared.graph.contentHash, zone: zoneDef, policy,
       home: { requested: start.requested, edgeId: start.edgeId, offsetMeters: start.offset },
       settings: { hoursPerDay, speedKmh }, confirmed: [], history: [],
+      ...(streetSet && poly === streetSet.ring ? { streetSet } : {}),
     };
     setCampaignCtx({ graph: prepared.graph, gi: prepared.gi, zoneInfo: prepared.zoneInfo, requirements: prepared.requirements });
     await saveCampaign(c);
@@ -753,6 +797,10 @@ export function App() {
                   </label>
                 )}
               </div>
+              {streetSet && (
+                <p className="status-line ok" data-testid="street-set">🛣 {t.streetSet}: <bdi>{streetSet.name[lang]}</bdi> · {fmtNum(streetSet.lines.length, lang)}
+                  <button className="link small" onClick={() => { setStreetSet(null); setPoly([]); invalidatePrepared(); setGraphState({ kind: 'none' }); }}>{t.clear}</button></p>
+              )}
               <p className={`status-line ${zoneVal ? (zoneVal.ok ? 'ok' : 'err') : 'hint'}`} data-testid="zone-status">
                 {!zoneVal ? (zoneMode === 'polygon' ? t.tapToAddVertex : t.tapToSetCenter)
                   : zoneVal.ok ? `${t.area}: ${fmtNum(zoneVal.areaSqMeters / 1e6, lang, 3)} km² · ${t.perimeter}: ${fmtMeters(zoneVal.perimeterMeters, t, lang)}`
@@ -848,7 +896,7 @@ export function App() {
             {tab === 'campaign' && (
               <CampaignPage t={t} lang={lang} campaign={campaign} ctx={campaignCtx} review={campaignReview}
                 canCreate={!!prepared && !!start?.confirmed && prepared.graph.dataState === 'available'}
-                createHint={t.campaignCreateHint}
+                createHint={t.campaignCreateHint} streetSet={streetSet} onPreset={loadPreset} onImportStreetSet={importStreetSet}
                 onCreate={createCampaign} onSave={saveCampaign} onShowDay={showCampaignDay} onDriveDay={driveCampaignDay}
                 onDelete={async () => { await store?.setSetting('campaign', null); setCampaign(null); setCampaignCtx(null); setCampaignReview(null); }} />
             )}

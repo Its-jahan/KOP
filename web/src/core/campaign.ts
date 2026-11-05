@@ -10,6 +10,7 @@ import { haversine, pointAtOffset } from './geo';
 import { addInterval, type Interval } from './intervals';
 import { legalShortestPath, planCoverage } from './planner';
 import { requirementCovered, type EdgeZoneInfo } from './requirements';
+import type { StreetSet } from './streets';
 import type { BoundaryPolicy, LonLat, PlanStep, RequiredInterval, RoutePlan, ZoneDefinition } from './types';
 
 export interface CampaignSettings {
@@ -58,6 +59,8 @@ export interface Campaign {
   /** Confirmed coverage (only what the user confirmed), per directed edge. */
   confirmed: [string, Interval[]][];
   history: { date: string; sessionId: string | null; confirmedMeters: number; requirementIds: string[] }[];
+  /** Optional explicit street list: only requirements on these streets are part of the campaign. */
+  streetSet?: StreetSet;
 }
 
 const stepLen = (s: PlanStep) => s.toOffsetMeters - s.fromOffsetMeters;

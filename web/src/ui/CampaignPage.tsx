@@ -5,6 +5,7 @@ import type { EdgeZoneInfo } from '../core/requirements';
 import { confirmDay, newlyDriven, planCampaign, undoLastDay, type Campaign, type CampaignPlan } from '../core/campaign';
 import type { Interval } from '../core/intervals';
 import type { RequiredInterval } from '../core/types';
+import type { StreetSet } from '../core/streets';
 import { fmtMeters, fmtNum, type Lang, type Strings } from '../i18n/strings';
 
 export interface CampaignContext {
@@ -20,7 +21,7 @@ export interface PendingReview {
 }
 
 export function CampaignPage({
-  t, lang, campaign, ctx, canCreate, createHint, onCreate, onSave, onShowDay, onDriveDay, review, onDelete,
+  t, lang, campaign, ctx, canCreate, createHint, onCreate, onSave, onShowDay, onDriveDay, review, onDelete, streetSet, onPreset, onImportStreetSet,
 }: {
   t: Strings;
   lang: Lang;
@@ -34,11 +35,19 @@ export function CampaignPage({
   onDriveDay: (plan: CampaignPlan, dayIndex: number) => void;
   review: PendingReview | null;
   onDelete: () => void;
+  streetSet: StreetSet | null;
+  onPreset: (file: string) => void;
+  onImportStreetSet: (f: File) => void;
 }) {
   const [hours, setHours] = useState(4);
   const [speed, setSpeed] = useState(14);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [presets, setPresets] = useState<{ id: string; name: { fa: string; en: string }; file: string }[]>([]);
+  useEffect(() => {
+    if (campaign) return;
+    fetch(`${import.meta.env.BASE_URL}presets/index.json`).then((r) => (r.ok ? r.json() : [])).then(setPresets).catch(() => setPresets([]));
+  }, [campaign]);
 
   const plan = useMemo(() => {
     if (!campaign || !ctx) return null;
@@ -68,6 +77,17 @@ export function CampaignPage({
     return (
       <section data-testid="campaign-create">
         <p>{t.campaignIntro}</p>
+        <div className="plan-card" data-testid="street-sets">
+          <strong>{t.streetSetPresets}</strong>
+          {presets.map((p) => (
+            <button key={p.id} className={streetSet?.id === p.id ? 'on' : ''} onClick={() => onPreset(p.file)} data-testid={`preset-${p.id}`}>🛣 <bdi>{p.name[lang]}</bdi></button>
+          ))}
+          <label className="link small">{t.streetSetImport}
+            <input type="file" accept=".json,.geojson,application/json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportStreetSet(f); e.target.value = ''; }} />
+          </label>
+          {streetSet && <p className="small ok">✓ {t.streetSet}: <bdi>{streetSet.name[lang]}</bdi> · {fmtNum(streetSet.lines.length, lang)}</p>}
+          <p className="small muted">{t.streetSetHint}</p>
+        </div>
         <label className="row">{t.campaignName}<input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.campaignNamePh} /></label>
         <label className="row">{t.hoursPerDay}<input type="number" min={0.5} max={12} step={0.5} value={hours} onChange={(e) => setHours(Number(e.target.value))} data-testid="hours" /></label>
         <label className="row">{t.avgSpeed}<input type="number" min={5} max={40} step={1} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} /></label>
@@ -91,6 +111,7 @@ export function CampaignPage({
           <div><b>{fmtNum(plan.days.length, lang)}</b><span>{t.campaignDaysLeft}</span></div>
         </div>
         <p className="small muted">{t.campaignSettingsLine.replace('{h}', fmtNum(campaign.settings.hoursPerDay, lang, 1)).replace('{v}', fmtNum(campaign.settings.speedKmh, lang))} · {t.campaignFinish} {finish.toLocaleDateString(lang === 'fa' ? 'fa-IR' : 'en-GB')}</p>
+        {campaign.streetSet && <p className="small muted">🛣 {t.streetSet}: <bdi>{campaign.streetSet.name[lang]}</bdi></p>}
         {plan.unplannable.length > 0 && <p className="small warn">{t.unreachable}: {fmtNum(plan.unplannable.length, lang)}</p>}
       </div>
 
