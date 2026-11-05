@@ -101,7 +101,7 @@ fun CampaignScreen(state: UiState, engine: Engine, actions: AppActions) {
     val c = state.campaign
     Page(stringResource(R.string.campaign_title), state, engine) {
         if (!c.exists) {
-            CreateForm(state, engine)
+            CreateForm(state, engine, actions)
             if (c.error == "corrupt") Text(stringResource(R.string.campaign_corrupt), color = Palette.warn, fontSize = 13.sp)
             return@Page
         }
@@ -127,6 +127,7 @@ fun CampaignScreen(state: UiState, engine: Engine, actions: AppActions) {
                         stringResource(R.string.campaign_finish) + " " + fmtDate(finish, lang),
                     fontSize = 13.sp, color = mutedColor(),
                 )
+                c.streetSet?.let { Text("🛣 " + stringResource(R.string.street_set) + ": " + FSI + it.name(lang) + PDI, fontSize = 13.sp, color = mutedColor()) }
                 if (c.unplannable > 0) Text(stringResource(R.string.campaign_unplannable, fmtInt(c.unplannable)), fontSize = 13.sp, color = Palette.warn)
             }
 
@@ -167,7 +168,7 @@ fun CampaignScreen(state: UiState, engine: Engine, actions: AppActions) {
 }
 
 @Composable
-private fun CreateForm(state: UiState, engine: Engine) {
+private fun CreateForm(state: UiState, engine: Engine, actions: AppActions) {
     var name by rememberSaveable { mutableStateOf("") }
     var hours by rememberSaveable { mutableStateOf("4") }
     var speed by rememberSaveable { mutableStateOf("14") }
@@ -176,6 +177,17 @@ private fun CreateForm(state: UiState, engine: Engine) {
     val v = parseLocalNumber(speed)
     val defaultName = stringResource(R.string.campaign_title)
     Text(stringResource(R.string.campaign_intro), fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+    val lang = Localized.language(LocalContext.current)
+    androidx.compose.runtime.LaunchedEffect(Unit) { engine.loadPresetIndex() }
+    Card {
+        Text(stringResource(R.string.street_set_presets), fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        state.presets.forEach { p ->
+            SmallButton("🛣 " + FSI + p.name(lang) + PDI, primary = state.streetSet?.id == p.id) { engine.loadPreset(p.file) }
+        }
+        TextButton(onClick = { actions.importStreetSet() }) { Text(stringResource(R.string.street_set_import)) }
+        state.streetSet?.let { Text("✓ " + stringResource(R.string.street_set) + ": " + FSI + it.name(lang) + PDI + " · " + fmtInt(it.count), fontSize = 13.sp, color = Palette.ok) }
+        Text(stringResource(R.string.street_set_hint), fontSize = 13.sp, color = mutedColor())
+    }
     OutlinedTextField(
         value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.campaign_name)) },
         placeholder = { Text(stringResource(R.string.campaign_name_ph)) }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),

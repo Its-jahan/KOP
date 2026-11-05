@@ -165,8 +165,14 @@ data class CampaignReviewUi(val sessionId: String, val day: Int?, val groups: Li
 
 data class CampaignHistoryUi(val date: String, val meters: Double)
 
+/** A street set (explicit street list) shown in the UI; `file` is set for bundled presets. */
+data class StreetSetUi(val id: String, val nameFa: String, val nameEn: String, val count: Int, val file: String = "") {
+    fun name(lang: String) = if (lang == "fa") nameFa else nameEn
+}
+
 data class CampaignUi(
     val exists: Boolean = false,
+    val streetSet: StreetSetUi? = null,
     /** Graph / plan being (re)computed. */
     val loading: Boolean = false,
     /** graph_missing | corrupt | storage */
@@ -212,4 +218,8 @@ data class UiState(
     /** idle | active | permission_denied | location_disabled */
     val myLocationState: String = "idle",
     val campaign: CampaignUi = CampaignUi(),
+    /** Street set applied to the current zone (only its streets are required). */
+    val streetSet: StreetSetUi? = null,
+    /** Bundled street-set presets. */
+    val presets: List<StreetSetUi> = emptyList(),
 )

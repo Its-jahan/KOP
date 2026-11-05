@@ -740,6 +740,13 @@ private fun AreaStep(state: UiState, engine: Engine, peek: Boolean) {
             RadiusField(z.radiusMeters) { engine.setRadius(it) }
         }
     }
+    state.streetSet?.let { ss ->
+        val lang = Localized.language(LocalContext.current)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("🛣 " + stringResource(R.string.street_set) + ": " + "\u2068" + ss.name(lang) + "\u2069" + " · " + ss.count, fontSize = 14.sp, color = Palette.ok, modifier = Modifier.weight(1f, fill = false))
+            LinkText(stringResource(R.string.clear)) { engine.clearZone() }
+        }
+    }
     val hasZone = if (z.mode == ZoneMode.POLYGON) z.vertices.size >= 3 else z.circleCenter != null
     val hard = z.errors.filter { it != "large_zone" }
     when {

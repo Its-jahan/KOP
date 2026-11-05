@@ -232,6 +232,11 @@
     <string name="zoom_out">کوچک‌نمایی</string>
     <string name="campaign_title">برنامه ماهانه</string>
     <string name="campaign_intro">یک محدوده بزرگ را در چند روز پوشش دهید. ابتدا کل محدوده را بکشید، شبکه معابر را بارگیری و نقطه شروع ثابت (خانه/محل کار) را تأیید کنید؛ برنامه کار را به مسیرهای روزانه متناسب با وقتتان تقسیم می‌کند و بعد از هر روز دوباره می‌چیند.</string>
+    <string name="street_set">فهرست خیابان‌ها</string>
+    <string name="street_set_presets">محدوده‌های آماده</string>
+    <string name="street_set_import">ورود فهرست خیابان (JSON/GeoJSON)</string>
+    <string name="street_set_hint">فقط خیابان‌های این فهرست لازم‌اند؛ بقیه معابر محدوده فقط برای عبور استفاده می‌شوند.</string>
+    <string name="msg_street_set_failed">فهرست خیابان خوانده نشد: %1$s</string>
     <string name="campaign_create_hint">ابتدا در «آماده‌سازی» محدوده را بکشید، معابر را بارگیری و نقطه شروع را تأیید کنید.</string>
     <string name="campaign_name">نام</string>
     <string name="campaign_name_ph">مثلاً کنترون، آبان</string>

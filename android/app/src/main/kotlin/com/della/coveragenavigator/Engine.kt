@@ -120,6 +120,7 @@ private class Prepared(
     val zone: ZoneDefinition,
     val req: RequirementsResult,
     val endpoint: String?,
+    val streetSet: della.core.StreetSet? = null,
 )
 
 /** Live session state. */
@@ -268,8 +269,66 @@ class Engine(private val appContext: Context, private val store: Store) {
         _ui.update { it.copy(camera = CameraCmd(++cameraSeq, south, west, north, east)) }
     }
 
+    /** Explicit street list for the current zone (web App streetSet); dropped on any manual zone edit. */
+    private var streetSet: della.core.StreetSet? = null
+
+    private fun dropStreetSet() {
+        if (streetSet == null) return
+        streetSet = null
+        _ui.update { it.copy(streetSet = null) }
+    }
+
+    /** Street-set presets bundled in assets/presets (same files as web/public/presets). */
+    fun loadPresetIndex() = post {
+        if (_ui.value.presets.isNotEmpty()) return@post
+        val list = withContext(Dispatchers.IO) {
+            try {
+                val arr = ContractJson.parse(appContext.assets.open("presets/index.json").use { it.readBytes().toString(Charsets.UTF_8) }) as kotlinx.serialization.json.JsonArray
+                arr.map { e ->
+                    val o = e as JsonObject
+                    val n = o["name"] as JsonObject
+                    StreetSetUi((o["id"] as JsonPrimitive).content, (n["fa"] as JsonPrimitive).content, (n["en"] as JsonPrimitive).content, 0, (o["file"] as JsonPrimitive).content)
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        }
+        _ui.update { it.copy(presets = list) }
+    }
+
+    fun loadPreset(file: String) = post {
+        val text = withContext(Dispatchers.IO) {
+            try {
+                appContext.assets.open("presets/$file").use { it.readBytes().toString(Charsets.UTF_8) }
+            } catch (e: Exception) {
+                null
+            }
+        }
+        applyStreetSetText(text, file)
+    }
+
+    /** Import a street set (our JSON or GeoJSON file contents). */
+    fun importStreetSet(text: String?, name: String) = post { applyStreetSetText(text, name) }
+
+    private suspend fun applyStreetSetText(text: String?, name: String) {
+        if (active != null) return
+        val ss = try {
+            withContext(Dispatchers.Default) { della.core.StreetSetJson.parse(ContractJson.parse(text!!), name.substringBeforeLast('.')) }
+        } catch (e: Exception) {
+            toast(R.string.msg_street_set_failed, e.message ?: e.javaClass.simpleName)
+            return
+        }
+        _ui.update { it.copy(zone = ZoneInfo(mode = ZoneMode.POLYGON, vertices = ss.ring, radiusMeters = it.zone.radiusMeters), tapMode = TapMode.ZONE, screen = Screen.PREPARE) }
+        invalidateGraph()
+        streetSet = ss
+        _ui.update { it.copy(streetSet = StreetSetUi(ss.id, ss.nameFa, ss.nameEn, ss.lines.size)) }
+        refreshZone()
+        fetchGraph()
+    }
+
     fun setZoneMode(mode: ZoneMode) = post {
         if (active != null) return@post
+        dropStreetSet()
         _ui.update { it.copy(zone = ZoneInfo(mode = mode, radiusMeters = it.zone.radiusMeters), tapMode = TapMode.ZONE) }
         invalidateGraph()
         refreshZone()
@@ -280,6 +339,7 @@ class Engine(private val appContext: Context, private val store: Store) {
         val s = _ui.value
         when (s.tapMode) {
             TapMode.ZONE -> {
+                dropStreetSet()
                 val z = s.zone
                 if (z.mode == ZoneMode.POLYGON) _ui.update { it.copy(zone = z.copy(vertices = z.vertices + p)) }
                 else _ui.update { it.copy(zone = z.copy(circleCenter = p)) }
@@ -293,7 +353,7 @@ class Engine(private val appContext: Context, private val store: Store) {
     fun moveVertex(index: Int, p: LonLat, final: Boolean) = post {
         if (active != null) return@post
         val z = _ui.value.zone
-        if (index !in z.vertices.indices) return@post
+        if (index !in z.vertices.indices || streetSet != null) return@post
         _ui.update { it.copy(zone = z.copy(vertices = z.vertices.toMutableList().also { l -> l[index] = p })) }
         if (final) invalidateGraph()
         refreshZone()
@@ -302,6 +362,7 @@ class Engine(private val appContext: Context, private val store: Store) {
     fun undoVertex() = post {
         val z = _ui.value.zone
         if (active != null || z.vertices.isEmpty()) return@post
+        dropStreetSet()
         _ui.update { it.copy(zone = z.copy(vertices = z.vertices.dropLast(1))) }
         invalidateGraph()
         refreshZone()
@@ -309,6 +370,7 @@ class Engine(private val appContext: Context, private val store: Store) {
 
     fun clearZone() = post {
         if (active != null) return@post
+        dropStreetSet()
         _ui.update { it.copy(zone = ZoneInfo(mode = it.zone.mode, radiusMeters = it.zone.radiusMeters)) }
         invalidateGraph()
         refreshZone()
@@ -386,8 +448,10 @@ class Engine(private val appContext: Context, private val store: Store) {
                     if (g.directedEdges.isEmpty()) throw OverpassException(FailureInput.GraphEmpty, result.attempts, "empty")
                     if (g.directedEdges.size > MAX_GRAPH_EDGES) throw OverpassException(FailureInput.GraphTooLarge(g.directedEdges.size, MAX_GRAPH_EDGES), result.attempts, "too large")
                     val gi = GraphIndex(g)
-                    val req = computeRequirements(gi, def)
-                    Prepared(g, gi, def, req, Overpass.hostOf(result.endpoint))
+                    val ss = streetSet
+                    val full = computeRequirements(gi, def)
+                    val req = if (ss == null) full else RequirementsResult(full.zoneInfo, della.core.filterRequirementsByStreets(gi, full.requirements, ss.lines), full.ignoredSlivers, full.ignoredSliverMeters)
+                    Prepared(g, gi, def, req, Overpass.hostOf(result.endpoint), ss)
                 }
                 withContext(Dispatchers.IO) { store.saveGraph(built.graph, built.endpoint) }
                 prepared = built
@@ -656,7 +720,7 @@ class Engine(private val appContext: Context, private val store: Store) {
                 ContractJson.obj("plan" to ContractJson.encodePlan(firstPlan), "reason" to JsonPrimitive("preview"))),
         )
         try {
-            store.createSession(sessionId, p.graph.contentHash, encodeBase(base, labOn), events)
+            store.createSession(sessionId, p.graph.contentHash, encodeBase(base, labOn, reqIds = if (p.streetSet != null) p.req.requirements.map { it.requirementId } else null), events)
         } catch (e: Exception) {
             toast(R.string.msg_storage_error, e.javaClass.simpleName)
             return@withContext false
@@ -676,7 +740,7 @@ class Engine(private val appContext: Context, private val store: Store) {
         true
     }
 
-    private fun encodeBase(b: SessionBase, lab: Boolean, imported: Boolean = false, day: CampaignTag? = null): String = ContractJson.stringify(
+    private fun encodeBase(b: SessionBase, lab: Boolean, imported: Boolean = false, day: CampaignTag? = null, reqIds: List<String>? = null): String = ContractJson.stringify(
         ContractJson.obj(
             "sessionId" to JsonPrimitive(b.sessionId), "graphId" to JsonPrimitive(b.graphId), "contentHash" to JsonPrimitive(b.contentHash),
             "zone" to ContractJson.encodeZone(b.zone), "vehicleProfile" to JsonPrimitive(b.vehicleProfile), "boundaryPolicy" to JsonPrimitive(b.boundaryPolicy),
@@ -684,7 +748,7 @@ class Engine(private val appContext: Context, private val store: Store) {
             "startSelection" to (ContractJson.encodeSession(dummySession(b)) ["startSelection"]!!),
             "createdAt" to JsonPrimitive(b.createdAt), "lab" to JsonPrimitive(lab), "imported" to JsonPrimitive(imported),
         ).let { o ->
-            if (day == null) o
+            if (day == null) { if (reqIds == null) o else JsonObject(o + ("requirementIds" to ContractJson.strs(reqIds))) }
             else JsonObject(o + mapOf("campaignId" to JsonPrimitive(day.campaignId), "campaignDay" to JsonPrimitive(day.day), "requirementIds" to ContractJson.strs(day.requirementIds)))
         },
     )
@@ -700,6 +764,13 @@ class Engine(private val appContext: Context, private val store: Store) {
             id, (o["campaignDay"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
             (o["requirementIds"] as? kotlinx.serialization.json.JsonArray)?.map { (it as JsonPrimitive).content } ?: emptyList(),
         )
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Requirement subset stored with a session (campaign day or street set), or null for the whole zone. */
+    private fun storedRequirementIds(json: String): List<String>? = try {
+        ((ContractJson.parse(json) as JsonObject)["requirementIds"] as? kotlinx.serialization.json.JsonArray)?.map { (it as JsonPrimitive).content }
     } catch (e: Exception) {
         null
     }
@@ -1182,11 +1253,11 @@ class Engine(private val appContext: Context, private val store: Store) {
         // (observations redacted by the exporter), so they only require strictly increasing seq.
         val rec = if (isImported(stored.baseJson)) recoverIncreasing(sessionId, records) else recoverEventLog(sessionId, StorageImage(cp, records))
         if (rec.discarded.isNotEmpty()) withContext(Dispatchers.IO) { store.truncateAfter(sessionId, rec.lastValidSeq) }
-        val tag = campaignTag(stored.baseJson)
+        val subset = campaignTag(stored.baseJson)?.requirementIds ?: storedRequirementIds(stored.baseJson)
         val built = withContext(Dispatchers.Default) {
             val gi = GraphIndex(graph)
             val full = computeRequirements(gi, base.zone.definition)
-            Triple(gi, if (tag != null) dayRequirements(full, tag.requirementIds.toHashSet()) else full, full)
+            Triple(gi, if (subset != null) dayRequirements(full, subset.toHashSet()) else full, full)
         }
         val progress = applyEvents(emptyProgress(), rec.events, ApplyContext(sessionId, graph.contentHash, graph.directedEdges.associate { it.edgeId to it.lengthMm / 1000.0 }))
         val a = Active(sessionId, base, graph, built.first, built.second, lab, rec.lastValidSeq, progress)
@@ -1374,7 +1445,9 @@ class Engine(private val appContext: Context, private val store: Store) {
                 }
                 ctx = withContext(Dispatchers.Default) {
                     val gi = GraphIndex(graph)
-                    CampaignCtx(graph, gi, computeRequirements(gi, c.zone))
+                    val full = computeRequirements(gi, c.zone)
+                    val ss = c.streetSet
+                    CampaignCtx(graph, gi, if (ss == null) full else RequirementsResult(full.zoneInfo, della.core.filterRequirementsByStreets(gi, full.requirements, ss.lines), full.ignoredSlivers, full.ignoredSliverMeters))
                 }
                 campaignCtx = ctx
             }
@@ -1438,6 +1511,7 @@ class Engine(private val appContext: Context, private val store: Store) {
         val plan = campaignPlan
         val base = CampaignUi(
             exists = true, loading = campaignJob?.isActive == true && campaignError == null, error = campaignError, name = c.name,
+            streetSet = c.streetSet?.let { StreetSetUi(it.id, it.nameFa, it.nameEn, it.lines.size) },
             hoursPerDay = c.settings.hoursPerDay, speedKmh = c.settings.speedKmh,
             history = c.history.map { CampaignHistoryUi(it.date, it.confirmedMeters) },
         )
@@ -1507,7 +1581,7 @@ class Engine(private val appContext: Context, private val store: Store) {
         val c = Campaign(
             campaignId = "c-" + UUID.randomUUID().toString(), name = name, createdAt = isoNow(), graphId = p.graph.graphId, contentHash = p.graph.contentHash,
             zone = p.zone, policy = policy, home = CampaignHome(_ui.value.start.requested ?: s.position, s.edgeId, s.offsetMeters),
-            settings = CampaignSettings(hoursPerDay, speedKmh), confirmed = emptyList(), history = emptyList(),
+            settings = CampaignSettings(hoursPerDay, speedKmh), confirmed = emptyList(), history = emptyList(), streetSet = p.streetSet,
         )
         campaignCtx = CampaignCtx(p.graph, p.gi, p.req)
         saveCampaign(c)

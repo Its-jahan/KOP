@@ -66,6 +66,8 @@ data class Campaign(
     /** Confirmed coverage (only what the user confirmed), per directed edge, in insertion order. */
     val confirmed: List<Pair<String, List<Interval>>>,
     val history: List<CampaignHistoryEntry>,
+    /** Optional explicit street list: only requirements on these streets are part of the campaign. */
+    val streetSet: StreetSet? = null,
 )
 
 private fun stepLen(s: PlanStep) = s.toOffsetMeters - s.fromOffsetMeters
@@ -277,7 +279,7 @@ object CampaignJson {
                     obj("date" to JsonPrimitive(it.date), "sessionId" to str(it.sessionId), "confirmedMeters" to num(it.confirmedMeters), "requirementIds" to strs(it.requirementIds))
                 },
             ),
-        )
+        ).let { o -> if (c.streetSet == null) o else JsonObject(o + ("streetSet" to StreetSetJson.encode(c.streetSet))) }
     }
 
     fun decode(el: JsonElement): Campaign = with(ContractJson) {
@@ -300,6 +302,7 @@ object CampaignJson {
                 val e = it.o()
                 CampaignHistoryEntry(e.s("date"), if (e["sessionId"] == null || e["sessionId"] is JsonNull) null else e.s("sessionId"), e.d("confirmedMeters"), e.ss("requirementIds"))
             },
+            streetSet = o["streetSet"]?.takeIf { it !is JsonNull }?.let { StreetSetJson.parse(it, "street-set") },
         )
     }
 }

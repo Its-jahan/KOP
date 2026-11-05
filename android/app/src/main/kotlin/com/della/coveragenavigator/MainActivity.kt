@@ -72,6 +72,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val streetSetLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        lifecycleScope.launch {
+            val text = withContext(Dispatchers.IO) {
+                try {
+                    contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            engine.importStreetSet(text, uri.lastPathSegment?.substringAfterLast('/') ?: "street-set")
+        }
+    }
+
     private val ui = UiBridge()
 
     override fun attachBaseContext(newBase: Context) {
@@ -260,6 +274,8 @@ class MainActivity : ComponentActivity() {
 
         override fun import() = importLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream", "*/*"))
 
+        override fun importStreetSet() = streetSetLauncher.launch(arrayOf("application/json", "application/geo+json", "text/plain", "application/octet-stream", "*/*"))
+
         override fun setLanguage(lang: String) {
             Localized.setLanguage(this@MainActivity, lang)
             recreate()
@@ -278,6 +294,8 @@ interface AppActions {
     fun useGpsForStart()
     fun export(includeObservations: Boolean, includeGraph: Boolean)
     fun import()
+    /** Pick a street-set file (JSON/GeoJSON) for the monthly plan. */
+    fun importStreetSet()
     fun setLanguage(lang: String)
     /** Ask for location (if needed) and center the map on the current position. */
     fun showMyLocation()

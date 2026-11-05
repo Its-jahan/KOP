@@ -232,6 +232,11 @@
     <string name="zoom_out">Zoom out</string>
     <string name="campaign_title">Monthly plan</string>
     <string name="campaign_intro">Cover one big area over many days. Draw the whole area, load its roads and confirm your fixed start point (home/office) first; the app then splits the work into daily routes that fit your time and re-plans after each day.</string>
+    <string name="street_set">Street set</string>
+    <string name="street_set_presets">Ready-made areas</string>
+    <string name="street_set_import">Import street set (JSON/GeoJSON)</string>
+    <string name="street_set_hint">Only the listed streets are required; other roads in the area are used for driving only.</string>
+    <string name="msg_street_set_failed">Could not read the street set: %1$s</string>
     <string name="campaign_create_hint">First draw the area, load its roads and confirm the start point (Prepare).</string>
     <string name="campaign_name">Name</string>
     <string name="campaign_name_ph">e.g. Kentron, November</string>
