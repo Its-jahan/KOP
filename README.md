@@ -42,3 +42,45 @@ Two implementations of one frozen contract:
 - Stop the test if: GPS state is not "Reliable" for long periods, the app proposes a maneuver that
   contradicts signs, roads are missing/wrong compared with reality, or progress appears on roads
   you did not drive.
+
+## Evidence (2026-11-05, this repository)
+Revision: see `git log` (web/core fixes through planner 1.1.0, fixture revision 3).
+
+| Check | Command | Result |
+|---|---|---|
+| Web unit + contract fixtures F01–F21, JCS vectors, invariants, IndexedDB, controller regressions, Android→web interop | `cd web && npm test` | 62 passed |
+| Web lint / typecheck / production build | `npm run lint`, `npm run typecheck`, `npm run build` | pass |
+| Web browser E2E (Playwright, Pixel 7 emulation, **simulated** GPS, mocked Overpass) | `npm run test:e2e` | 6 passed |
+| Android Kotlin core (same fixtures F01–F21, hashes + plan sequences exact) | `cd android && ./gradlew :core:test` | 61 run, 0 failed, 1 skipped (optional real-data) |
+| Android lint, unit tests, APK | `./gradlew lint testDebugUnitTest assembleDebug` | exit 0 (lint 0 errors, 16 warnings) |
+| Independent review (separate agent, did not write the code) | review scripts + E2E | 14 confirmed defects; all fixed and re-verified (see git log 783c312) |
+
+Real OSM data (central Yerevan extract, 4,588 directed edges, 147 turn restrictions, Node 22 on
+the build machine — not a phone): normalise ≈1 s, plan ≤0.2 s, validate ≤25 ms for circles of
+250–800 m. Typical result for a 300 m strict circle: 618 required directed intervals, 215 planned;
+the rest are honestly reported as not plannable (courtyards behind gates/driveways tagged in OSM,
+one-way pieces that can only be entered or left outside the zone, needs-review tracks).
+Allowing outside connectors raises planned coverage at the cost of disclosed outside travel.
+
+Not tested (no hardware available): any physical phone browser, the BYD head unit, real GPS,
+the Android foreground service, MapLibre rendering on Android, screen-off behaviour.
+
+## Android APK (debug, for the controlled test only)
+`android/dist/della-coverage-navigator-0.1.0-fieldtest-debug.apk` (not committed; build with
+`cd android && ./gradlew assembleDebug`). Package `com.della.coveragenavigator`, versionName
+0.1.0-fieldtest, versionCode 1, minSdk 21, targetSdk 35, ABIs arm64-v8a/armeabi-v7a/x86/x86_64,
+30,592,617 bytes, SHA-256 `7e4b208233c51b0c3ef486435ddb55583722b5f1691b9cfe7fd2b7a179c90eaa`,
+debug-signed (a later release-signed build cannot update it in place: export sessions first,
+uninstall, install). Install: copy to USB/phone storage and open it on the head unit if its
+installer allows unknown apps, or `adb install -r <apk>` if USB debugging is enabled. Do not bypass
+manufacturer security prompts or modify the vehicle.
+
+## Field-test checklist (stop at the first failure)
+1. Parked: install/open; grant location; confirm GPS state reaches "Reliable" with accuracy ≤ 15 m.
+2. Draw a small familiar zone (2–4 blocks), load roads, confirm start and direction, plan.
+3. Export the empty session once (proves export works) and re-import it on the other device.
+4. Passenger-operated short drive: one street in each direction. Check the driven direction turns
+   green and the opposite direction stays unvisited.
+5. Deviate once on purpose (legally): the app must keep progress and replan from your position.
+6. Force-close / reload: reopen, tap Resume, verify progress is intact and the route is recomputed.
+7. Stop if positioning is unreliable, a maneuver contradicts signs, or roads differ from reality.
