@@ -141,6 +141,8 @@ private class Active(
     var noContinuation = false
     var lastGuidanceEvent: String? = null
     var lastMapUpdate = 0L
+    val nav = Navigator()
+    var lastHeading: Double? = null
     /** All computations use the hashed lengthMm. */
     val edgeLengths: Map<String, Double> = graph.directedEdges.associate { it.edgeId to it.lengthMm / 1000.0 }
     /** Events not yet durably written: retried in order, seq numbers are never reused or skipped. */
@@ -204,6 +206,12 @@ class Engine(private val appContext: Context, private val store: Store) {
     fun setScreen(s: Screen) = post { _ui.update { it.copy(screen = s) } }
     fun setTapMode(m: TapMode) = post { _ui.update { it.copy(tapMode = m) } }
     fun setFollow(f: Boolean) = post { _ui.update { it.copy(follow = f) } }
+
+    private val voice by lazy { Voice(appContext) }
+    fun setVoice(on: Boolean) = post {
+        _ui.update { it.copy(drive = it.drive.copy(voiceOn = on)) }
+        if (!on) voice.stop()
+    }
     fun setLabMode(on: Boolean) = post { if (active == null) _ui.update { it.copy(labMode = on && BuildConfig.DEBUG) } }
 
     fun focus(south: Double, west: Double, north: Double, east: Double) = post {
@@ -636,6 +644,7 @@ class Engine(private val appContext: Context, private val store: Store) {
         a.stepStart = stepStartDistances(plan)
         a.guidance = if (a.planValid) initialGuidance(plan) else null
         a.noContinuation = !a.planValid
+        a.nav.reset()
     }
 
     /**
@@ -977,7 +986,7 @@ class Engine(private val appContext: Context, private val store: Store) {
         val (metrics, statuses) = computeMetrics(a.req.requirements, a.progress)
         val gps = gpsInfo(a)
         val f = a.lastFix
-        val loc = if (f != null && a.progress.status == "active") GeoJson.location(LonLat(f.lon, f.lat), f.horizontalAccuracyMeters, gps.state == "reliable", f.bearingDeg) else GeoJson.EMPTY
+        val loc = if (f != null && a.progress.status == "active") GeoJson.location(LonLat(f.lon, f.lat), f.horizontalAccuracyMeters, gps.state == "reliable", a.lastHeading) else GeoJson.EMPTY
         val plan = a.plan
         var layers = _ui.value.layers.copy(location = loc)
         if (forceMap) {
@@ -988,6 +997,13 @@ class Engine(private val appContext: Context, private val store: Store) {
                 plan = if (a.planValid) GeoJson.plan(a.gi, plan, a.guidance?.cursor ?: 0) else GeoJson.EMPTY,
             )
         }
+        val now = SystemClock.elapsedRealtime()
+        val nav = if (a.progress.status == "active" && a.planValid && a.pendingOutsidePlan == null && !permissionDenied) {
+            a.nav.compute(a.gi, plan, a.maneuvers, a.stepStart, f, if (f != null) now - a.lastFixElapsed else Long.MAX_VALUE, System.currentTimeMillis())
+        } else null
+        layers = layers.copy(ahead = if (nav != null) GeoJson.lines(nav.ahead) else GeoJson.EMPTY)
+        if (f != null && (f.speedMps ?: 0.0) >= 2.5 && f.bearingDeg != null) a.lastHeading = f.bearingDeg
+        voice.announce(nav, _ui.value.drive.voiceOn && a.progress.status == "active")
         val drive = DriveInfo(
             sessionId = a.sessionId, status = a.progress.status, metrics = metrics, gps = gps, maneuver = maneuverInfo(a, gps),
             guidanceEvent = a.lastGuidanceEvent, replanning = a.replanJob?.isActive == true, planStatus = plan?.status, planValid = a.planValid,
@@ -995,11 +1011,13 @@ class Engine(private val appContext: Context, private val store: Store) {
             outsideMeters = plan?.totals?.outsideMeters ?: 0.0, gaps = a.progress.gaps.size, traversals = a.progress.traversals.size,
             recoveredNote = _ui.value.drive.recoveredNote,
             pendingWrites = a.pendingWrites.size,
+            nav = nav,
+            voiceOn = _ui.value.drive.voiceOn,
         )
         var cam: CameraCmd? = _ui.value.camera
         if (_ui.value.follow && f != null && a.progress.status == "active" && _ui.value.screen == Screen.DRIVE) {
             val d = 0.0012
-            cam = CameraCmd(++cameraSeq, f.lat - d, f.lon - d, f.lat + d, f.lon + d, 17.0)
+            cam = CameraCmd(++cameraSeq, f.lat - d, f.lon - d, f.lat + d, f.lon + d, 17.5, bearing = a.lastHeading ?: 0.0, tilt = 45.0, follow = true)
         }
         _ui.update { it.copy(drive = drive, layers = layers, camera = cam) }
         LocationService.updateNotification(appContext, metrics.percentConfirmed, a.progress.status)
@@ -1012,7 +1030,8 @@ class Engine(private val appContext: Context, private val store: Store) {
         }
         if (a.progress.status == "active") {
             val gps = gpsInfo(a)
-            _ui.update { it.copy(drive = it.drive.copy(gps = gps, maneuver = maneuverInfo(a, gps))) }
+            val stale = (gps.ageMs ?: Long.MAX_VALUE) > 8_000
+            _ui.update { it.copy(drive = it.drive.copy(gps = gps, maneuver = maneuverInfo(a, gps), nav = if (stale) null else it.drive.nav)) }
         }
     }
 

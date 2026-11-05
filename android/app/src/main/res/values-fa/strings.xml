@@ -209,4 +209,19 @@
     <string name="zone_polygon_help">برای افزودن رأس‌ها به ترتیب روی نقشه بزنید. برای تنظیم، رأس را بکشید.</string>
     <string name="zone_vertices">نقاط: %1$d</string>
     <string name="zone_warn_large">محدوده بزرگ: برنامه‌ریزی ممکن است طول بکشد؛ تقسیم آن را در نظر بگیرید.</string>
+    <string name="nav_join_route">به مسیر برنامه‌ریزی‌شده وارد شوید</string>
+    <string name="nav_go_to_route">به سمت مسیر بروید</string>
+    <string name="nav_to_route_remaining">%1$s تا مسیر</string>
+    <string name="nav_head_to_road">به نزدیک‌ترین خیابان بروید</string>
+    <string name="nav_then">سپس</string>
+    <string name="nav_approximate">موقعیت تقریبی</string>
+    <string name="nav_end_of_route">پایان مسیر برنامه‌ریزی‌شده نزدیک است</string>
+    <string name="nav_onto">به %1$s</string>
+    <string name="voice_in_meters">%1$d متر دیگر، %2$s</string>
+    <string name="voice_onto">به %1$s</string>
+    <string name="voice_turnaround_if_safe">فقط اگر ایمن و مجاز است دور بزنید</string>
+    <string name="voice_head_to_road">به نزدیک‌ترین خیابانِ روی نقشه بروید</string>
+    <string name="voice_on">صدا روشن</string>
+    <string name="voice_off">صدا خاموش</string>
+    <string name="overview">نمای کلی</string>
 </resources>

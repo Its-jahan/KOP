@@ -123,6 +123,9 @@ data class DriveInfo(
     val traversals: Int = 0,
     val recoveredNote: String? = null,
     val pendingWrites: Int = 0,
+    /** Turn-by-turn instruction (route, approach to the route, or head to a road). */
+    val nav: NavInstruction? = null,
+    val voiceOn: Boolean = true,
 )
 
 data class OutsideApproval(val newOutsideMeters: Double, val approvedOutsideMeters: Double)
@@ -134,9 +137,15 @@ data class MapLayers(
     val plan: String = GeoJson.EMPTY,
     val markers: String = GeoJson.EMPTY,
     val location: String = GeoJson.EMPTY,
+    /** The next ~1.5 km of the path being guided (highlighted). */
+    val ahead: String = GeoJson.EMPTY,
 )
 
-data class CameraCmd(val id: Long, val south: Double, val west: Double, val north: Double, val east: Double, val zoom: Double? = null)
+data class CameraCmd(
+    val id: Long, val south: Double, val west: Double, val north: Double, val east: Double, val zoom: Double? = null,
+    /** Driving camera: heading-up, tilted, vehicle placed in the lower part of the screen. */
+    val bearing: Double? = null, val tilt: Double? = null, val follow: Boolean = false,
+)
 
 data class RecoveryOffer(val sessionId: String, val createdAt: Long, val updatedAt: Long, val lab: Boolean)
 

@@ -119,6 +119,12 @@ object GeoJson {
         return fc.done()
     }
 
+    fun lines(parts: List<List<LonLat>>): String {
+        val fc = FC()
+        for (pts in parts) if (pts.size >= 2) fc.add({ line(pts) }, emptyMap())
+        return fc.done()
+    }
+
     fun location(p: LonLat?, accuracy: Double?, reliable: Boolean, bearing: Double?): String {
         if (p == null) return EMPTY
         val fc = FC()

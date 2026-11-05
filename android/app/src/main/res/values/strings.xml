@@ -209,4 +209,19 @@
     <string name="zone_polygon_help">Tap the map to add corners in order. Drag a corner to adjust.</string>
     <string name="zone_vertices">Points: %1$d</string>
     <string name="zone_warn_large">Large zone: planning may take longer; consider splitting.</string>
+    <string name="nav_join_route">Join the planned route</string>
+    <string name="nav_go_to_route">Drive to the route</string>
+    <string name="nav_to_route_remaining">%1$s to the route</string>
+    <string name="nav_head_to_road">Drive to the nearest road</string>
+    <string name="nav_then">Then</string>
+    <string name="nav_approximate">Approximate position</string>
+    <string name="nav_end_of_route">End of planned route ahead</string>
+    <string name="nav_onto">onto %1$s</string>
+    <string name="voice_in_meters">In %1$d meters, %2$s</string>
+    <string name="voice_onto">onto %1$s</string>
+    <string name="voice_turnaround_if_safe">Turn around only if safe and legal</string>
+    <string name="voice_head_to_road">Drive to the nearest road shown on the map</string>
+    <string name="voice_on">Voice on</string>
+    <string name="voice_off">Voice off</string>
+    <string name="overview">Overview</string>
 </resources>
