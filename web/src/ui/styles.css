@@ -84,6 +84,9 @@ details summary { cursor: pointer; padding: 6px 0; }
 .stepper li.cur .dot { background: var(--primary); color: #fff; }
 .stepper li.done .dot { background: var(--done); color: #fff; }
 .sheet section { padding: 2px 0; }
+.sheet.min { max-height: 30dvh; }
+.sheet.min section > :not(.sticky-cta):not(.status-line) { display: none; }
+.sticky-cta { position: sticky; bottom: calc(-14px - env(safe-area-inset-bottom)); background: var(--surface); padding: 4px 0 calc(10px + env(safe-area-inset-bottom)); margin-bottom: calc(-14px - env(safe-area-inset-bottom)); }
 .summary { margin: 0 0 8px; font-size: .9rem; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .status-line { margin: 8px 0; font-size: .95rem; }
 .status-line.hint { color: var(--muted); }

@@ -235,3 +235,37 @@ test('position is always shown and the driving banner gives turn-by-turn directi
   await expect(banner).toBeVisible();
   await expect(page.getByTestId('where-chip')).toContainText('You are here');
 });
+
+test('lane guidance is shown in the maneuver card (Persian UI)', async ({ context, page }) => {
+  const LANES = readFileSync(join(process.cwd(), 'tests/e2e/data/lanes-overpass.json'), 'utf8');
+  await context.route(/tile\.openstreetmap\.org/, (r) => r.fulfill({ status: 200, contentType: 'image/png', body: PNG }));
+  await context.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.fulfill({ status: 200, body: '' }));
+  await context.route(/overpass|interpreter/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: LANES }));
+  await context.grantPermissions(['geolocation']);
+  const [lon0, lat0] = ll(5, 0);
+  await context.setGeolocation({ longitude: lon0, latitude: lat0, accuracy: 6 });
+  await page.goto('/');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await page.evaluate(() => (window as unknown as { __coverageMap: { map: { jumpTo: (o: object) => void } } }).__coverageMap.map.jumpTo({ center: [44.50118, 40.18045], zoom: 16 }));
+  await page.waitForTimeout(400);
+  for (const [x, y] of [[-30, -30], [230, -30], [230, 130], [-30, 130]] as [number, number][]) await mapClick(page, x, y);
+  await page.getByTestId('load-roads').click();
+  await expect(page.getByTestId('graph-stats')).toBeVisible();
+  await page.getByTestId('pick-start').click();
+  await mapClick(page, 10, 2);
+  await page.getByTestId('flip-or-confirm').or(page.getByTestId('confirm-start')).first().click();
+  await page.getByTestId('plan').click();
+  await expect(page.getByTestId('plan-summary')).toBeVisible();
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/route-fa.png' });
+  await page.getByTestId('start-driving').click();
+  for (const x of [20, 40, 60, 80, 100, 120]) {
+    const [lon, lat] = ll(x, 0);
+    await context.setGeolocation({ longitude: lon, latitude: lat, accuracy: 6 });
+    await page.waitForTimeout(1050);
+  }
+  const lanes = page.getByTestId('lanes');
+  await expect(lanes).toBeVisible();
+  await expect(lanes.locator('.lane')).toHaveCount(3);
+  await expect(lanes.locator('.lane.ok')).toHaveCount(1);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/lanes-fa.png' });
+});

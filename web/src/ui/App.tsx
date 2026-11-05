@@ -570,6 +570,7 @@ export function App() {
 
   const step: 'area' | 'start' | 'route' = !prepared ? 'area' : !start?.confirmed ? 'start' : 'route';
   const sheetPeek = pickStart || (step === 'area' && !sheetOpen);
+  const sheetMin = step !== 'area' && sheetOpen && !pickStart; // handle tapped: show only the essentials
   const inDrive = tab === 'drive' && !!drive && !!driveSnap;
   const pageOpen = tab === 'sessions' || tab === 'settings';
 
@@ -616,7 +617,7 @@ export function App() {
 
       {/* preparation: bottom sheet with 3 steps */}
       {!inDrive && (
-        <aside className={`sheet ${sheetPeek ? 'peek' : ''}`} data-testid="prepare-panel">
+        <aside className={`sheet ${sheetPeek ? 'peek' : ''} ${sheetMin ? 'min' : ''}`} data-testid="prepare-panel">
           <button className="sheet-handle" aria-label={t.more} onClick={() => setSheetOpen((v) => !v)}><span /></button>
           <ol className="stepper">
             {(['area', 'start', 'route'] as const).map((k, i) => {
@@ -698,7 +699,7 @@ export function App() {
                 {planning && <button onClick={cancelPlanning}>{t.cancel}</button>}
               </div>
               {plan && <PlanSummary t={t} lang={lang} plan={plan} approve={approveOutside} setApprove={setApproveOutside} />}
-              <button className="go big" disabled={startBlockers.length > 0} onClick={beginDriving} data-testid="start-driving">▶ {t.startDriving}</button>
+              <div className="sticky-cta"><button className="go big" disabled={startBlockers.length > 0} onClick={beginDriving} data-testid="start-driving">▶ {t.startDriving}</button></div>
               {startBlockers.length > 0 && <p className="muted small" data-testid="start-blockers">{t.startDisabled}: {startBlockers.join(' · ')}</p>}
               <details className="small muted"><summary>{t.safetyTitle}</summary><p>{t.foregroundNote}</p><p>{t.safety}</p></details>
             </section>
@@ -805,7 +806,7 @@ function PlanSummary({ t, lang, plan, approve, setApprove }: { t: Strings; lang:
         {p.totals.outsideMeters > 2 && <div className="warn"><b>{fmtMeters(p.totals.outsideMeters, t, lang)}</b><span>{t.outside}</span></div>}
       </div>
       <p className="small">
-        <span className={plan.validation.ok ? 'ok' : 'err'}>{p.status} · {plan.validation.ok ? '✓' : '✗'}</span>
+        <span className={plan.validation.ok ? 'ok' : 'err'}>{(t as unknown as Record<string, string>)[`planStatus_${p.status}`] ?? p.status} · {plan.validation.ok ? '✓' : '✗'}</span>
         {unplanned > 0 && <> · {t.unreachable}: {fmtNum(unplanned, lang)}</>}
         {unverified > 0 && <> · {t.unverifiedTurnarounds}: {fmtNum(unverified, lang)}</>}
       </p>
