@@ -17,6 +17,10 @@ import { STRINGS, fmtMeters, fmtNum, type Lang, type Strings } from '../i18n/str
 import { MapView, circlePolygon } from './mapView';
 import { coveredFeatures, requirementFeatures, routeFeatures } from './geojson';
 import { DriveController, type DriveSnapshot } from './driveController';
+import { locationHub } from './locationHub';
+import type { NavInstruction } from '../core/navigator';
+import type { GpsSourceState } from './gps';
+import type { LocationObservation } from '../core/types';
 
 export const APP_VERSION = '0.1.0';
 const MAX_EDGES = 60_000; // measured/tested ceiling for this build (see README)
@@ -81,6 +85,11 @@ export function App() {
   const [sessions, setSessions] = useState<SessionHeader[]>([]);
   const [resumable, setResumable] = useState<SessionHeader | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  // Always-on "where am I" (every screen), independent of coverage crediting.
+  const [myFix, setMyFix] = useState<LocationObservation | null>(null);
+  const [myGps, setMyGps] = useState<GpsSourceState>('idle');
+  const [follow, setFollow] = useState(true);
+  const centeredOnceRef = useRef(false);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -91,6 +100,10 @@ export function App() {
   useEffect(() => {
     if (!mapEl.current || mapRef.current) return;
     mapRef.current = new MapView(mapEl.current);
+    mapRef.current.onUserPan(() => setFollow(false));
+    const offFix = locationHub.onFix(setMyFix);
+    const offState = locationHub.onState(setMyGps);
+    locationHub.start();
     // Diagnostics/E2E hook: exposes only the map widget (no data, no credentials).
     (window as unknown as { __coverageMap?: MapView }).__coverageMap = mapRef.current;
     engineRef.current = new Engine();
@@ -103,7 +116,11 @@ export function App() {
         setResumable(all.find((h) => h.status === 'active' || h.status === 'paused') ?? null);
       })
       .catch((e) => setStoreError(String(e.message ?? e)));
-    return () => engineRef.current?.dispose();
+    return () => {
+      offFix();
+      offState();
+      engineRef.current?.dispose();
+    };
   }, []);
 
   // ---------- zone ----------
@@ -425,14 +442,7 @@ export function App() {
       lr.planId = pid;
       lr.cursor = driveSnap.cursor;
     }
-    const f = driveSnap.lastFix;
-    const feats: GeoJSON.Feature[] = [];
-    if (f) {
-      const acc = Math.min(200, f.horizontalAccuracyMeters ?? 50);
-      feats.push({ type: 'Feature', properties: { kind: 'accuracy' }, geometry: { type: 'Polygon', coordinates: [circlePolygon([f.lon, f.lat], acc, 32)] } });
-      feats.push({ type: 'Feature', properties: { kind: 'dot', quality: driveSnap.quality }, geometry: { type: 'Point', coordinates: [f.lon, f.lat] } });
-    }
-    void mv.setData('pos', { type: 'FeatureCollection', features: feats });
+    void mv.setData('ahead', { type: 'FeatureCollection', features: (driveSnap.nav?.ahead ?? []).filter((l) => l.length > 1).map((l) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: l } })) });
     void mv.setData('trail', { type: 'FeatureCollection', features: driveSnap.trail.length > 1 ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: driveSnap.trail } }] : [] });
   }, [driveSnap, driveGi, drive, tab]);
 
@@ -446,6 +456,40 @@ export function App() {
   useEffect(() => {
     setTimeout(() => mapRef.current?.resize(), 50);
   }, [tab]);
+
+  // Position marker in every screen; follow camera while driving.
+  const driving = tab === 'drive' && driveSnap?.status === 'active';
+  useEffect(() => {
+    const mv = mapRef.current;
+    if (!mv) return;
+    const f = myFix;
+    const feats: GeoJSON.Feature[] = [];
+    if (f) {
+      const acc = Math.min(200, f.horizontalAccuracyMeters ?? 50);
+      const heading = locationHub.heading;
+      feats.push({ type: 'Feature', properties: { kind: 'accuracy' }, geometry: { type: 'Polygon', coordinates: [circlePolygon([f.lon, f.lat], acc, 32)] } });
+      feats.push({ type: 'Feature', properties: { kind: 'dot', heading: heading ?? -1, quality: acc <= 25 ? 'reliable' : 'approx' }, geometry: { type: 'Point', coordinates: [f.lon, f.lat] } });
+      if (follow && driving) mv.follow([f.lon, f.lat], heading, true);
+      else if (!centeredOnceRef.current && tab === 'prepare' && poly.length === 0 && !circle.center) {
+        centeredOnceRef.current = true;
+        mv.follow([f.lon, f.lat], null, false);
+      }
+    }
+    void mv.setData('pos', { type: 'FeatureCollection', features: feats });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myFix, follow, driving, tab]);
+
+  useEffect(() => {
+    void mapRef.current?.whenReady().then(() => mapRef.current?.setDriving(driving));
+    if (driving) setFollow(true);
+  }, [driving]);
+
+  function goToMyLocation() {
+    locationHub.start();
+    setFollow(true);
+    const f = locationHub.last;
+    if (f) mapRef.current?.follow([f.lon, f.lat], locationHub.heading, driving);
+  }
 
   async function refreshSessions() {
     if (store) setSessions(await store.listSessions());
@@ -541,7 +585,24 @@ export function App() {
         </div>
       )}
       <main className={`layout tab-${tab}`}>
-        <div className="map" ref={mapEl} data-testid="map" />
+        <div className="map-wrap">
+          <div className="map" ref={mapEl} data-testid="map" />
+          {tab === 'drive' && driveSnap?.status === 'active' && driveSnap.nav && <NavBanner t={t} lang={lang} n={driveSnap.nav} />}
+          <div className="map-buttons">
+            {tab === 'drive' && drive && driveSnap?.status === 'active' && (
+              <button className="map-btn" onClick={() => drive.setVoice(!driveSnap.voiceOn)} aria-label={driveSnap.voiceOn ? t.voiceOn : t.voiceOff}>{driveSnap.voiceOn ? '🔊' : '🔇'}</button>
+            )}
+            <button className={`map-btn ${follow ? 'on' : ''}`} onClick={goToMyLocation} aria-label={t.myLocation} title={t.myLocation} data-testid="my-location">◎</button>
+          </div>
+          <div className="where-chip" data-testid="where-chip">
+            {myFix ? `${t.youAreHere} · ±${fmtNum(myFix.horizontalAccuracyMeters ?? NaN, lang)} ${t.m}`
+              : myGps === 'permission_denied' ? t.permissionDenied
+              : myGps === 'insecure_context' ? t.insecure
+              : myGps === 'location_unavailable' ? t.locationOff
+              : myGps === 'idle' ? <button className="link" onClick={goToMyLocation}>{t.showMyLocation}</button>
+              : t.locating}
+          </div>
+        </div>
         {tab === 'prepare' && (
           <aside className="panel" data-testid="prepare-panel">
             <PlaceSearch t={t} lang={lang} onPick={(r) => mapRef.current?.fitBbox(r.bbox, 15)} />
@@ -716,6 +777,36 @@ const MANEUVER_ICON: Record<string, string> = {
   continue: '↑', slight_right: '↗', right: '→', sharp_right: '↘', slight_left: '↖', left: '←', sharp_left: '↙', turnaround: '⤸', arrive: '■', depart: '↑',
 };
 
+function navAction(t: Strings, n: NavInstruction): string {
+  if (n.mode === 'to_road') return t.navHeadToRoad;
+  if (n.type === 'join') return t.navJoinRoute;
+  if (n.type === 'turnaround' && !n.turnaroundVerified) return t.turnaroundUnverified;
+  return ((t as unknown as Record<string, string>)[n.type]) ?? t.continue;
+}
+
+/** Big turn-by-turn banner over the map. */
+function NavBanner({ t, lang, n }: { t: Strings; lang: Lang; n: NavInstruction }) {
+  const glyph = n.mode === 'to_road' ? '➤' : n.type === 'join' ? '⤴' : MANEUVER_ICON[n.type] ?? '↑';
+  const rot = n.mode === 'to_road' ? (n.relativeBearing ?? n.headBearing ?? 0) - 90 : 0;
+  return (
+    <div className="nav-banner" data-testid="nav-banner" dir={lang === 'fa' ? 'rtl' : 'ltr'}>
+      <div className="nav-main">
+        <span className="nav-glyph" style={{ transform: `rotate(${rot}deg)` }}>{glyph}</span>
+        <div>
+          <div className="nav-dist">{fmtMeters(n.distanceMeters, t, lang)}</div>
+          <div className="nav-act">{navAction(t, n)}</div>
+          {n.roadName && <div className="nav-road">{t.onto} <bdi>{n.roadName}</bdi></div>}
+        </div>
+      </div>
+      {n.mode === 'approach' && n.rejoinMeters !== null && <div className="nav-sub">{t.navGoToRoute} · {fmtMeters(n.rejoinMeters, t, lang)} {t.navToRoute}</div>}
+      {n.thenType && n.thenDistanceMeters !== null && n.thenDistanceMeters < 400 && (
+        <div className="nav-then">{t.navThen}: {n.thenType === 'join' ? t.navJoinRoute : `${MANEUVER_ICON[n.thenType] ?? ''} ${((t as unknown as Record<string, string>)[n.thenType]) ?? ''}`}{n.thenRoadName ? ` · ${n.thenRoadName}` : ''}</div>
+      )}
+      {n.approximate && <div className="nav-approx">{t.navApproximate}</div>}
+    </div>
+  );
+}
+
 function DrivePanel({ t, lang, snap, dc, onToast }: { t: Strings; lang: Lang; snap: DriveSnapshot; dc: DriveController; gi: GraphIndex; onToast: (s: string) => void }) {
   const [, force] = useState(0);
   useEffect(() => {
@@ -751,6 +842,7 @@ function DrivePanel({ t, lang, snap, dc, onToast }: { t: Strings; lang: Lang; sn
           )
           : snap.notice === 'outside_policy' ? <span className="warn">{t.outsideZoneStop}</span>
           : snap.notice === 'finished' ? <span>{t.finished}</span>
+          : snap.nav ? <span>{navAction(t, snap.nav)} · <strong>{fmtMeters(snap.nav.distanceMeters, t, lang)}</strong></span>
           : nm ? (
             <>
               <span className="icon">{MANEUVER_ICON[nm.type] ?? '•'}</span>

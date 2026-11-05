@@ -12,7 +12,10 @@ import type { EdgeZoneInfo } from '../core/requirements';
 import { SCHEMA_VERSION, type GraphSnapshot, type LocationObservation, type LonLat, type RequirementStatus, type RoutePlan, type SessionEvent, type SessionEventType } from '../core/types';
 import type { Engine } from '../worker/engine';
 import type { SessionHeader, Store } from '../storage/db';
-import { BrowserGps, WakeLockKeeper, type GpsSourceState } from './gps';
+import { WakeLockKeeper, type GpsSourceState } from './gps';
+import { locationHub } from './locationHub';
+import { Navigator, type NavInstruction } from '../core/navigator';
+import { Voice } from './voice';
 
 export interface DriveSnapshot {
   status: SessionHeader['status'];
@@ -24,6 +27,9 @@ export interface DriveSnapshot {
   planValid: boolean;
   cursor: number;
   nextManeuver: (Maneuver & { distanceMeters: number }) | null;
+  /** Turn-by-turn instruction from any reasonable fix (route, approach, or head to a road). */
+  nav: NavInstruction | null;
+  voiceOn: boolean;
   metrics: CoverageMetrics;
   statuses: Map<string, RequirementStatus>;
   progress: DerivedProgress;
@@ -44,7 +50,10 @@ export class DriveController {
   private guidance: GuidanceState | null = null;
   private progress: DerivedProgress;
   private header: SessionHeader;
-  private gps: BrowserGps;
+  private unsubFix: (() => void) | null = null;
+  private unsubState: () => void;
+  private navEngine = new Navigator();
+  readonly voice = new Voice('fa');
   private wake: WakeLockKeeper;
   private listeners = new Set<(s: DriveSnapshot) => void>();
   private planValid = true;
@@ -84,11 +93,11 @@ export class DriveController {
     this.snap = {
       status: this.progress.status === 'ready' ? header.status : this.progress.status,
       gpsSource: 'idle', quality: 'acquiring', lastFix: null, matched: null, plan: fresh ? this.progress.plan : null, planValid: true,
-      cursor: 0, nextManeuver: null, metrics, statuses, progress: this.progress, replanning: false, notice: 'none',
+      cursor: 0, nextManeuver: null, nav: null, voiceOn: true, metrics, statuses, progress: this.progress, replanning: false, notice: 'none',
       wakeLock: 'idle', storageError: null, trail: [], pendingOutsidePlan: null, unsavedEvents: 0,
     };
     this.timer = setInterval(() => this.tick(), 1000);
-    this.gps = new BrowserGps({ onFix: (o) => this.onFix(o), onState: (s) => this.update({ gpsSource: s }) });
+    this.unsubState = locationHub.onState((s) => this.update({ gpsSource: s }));
     this.wake = new WakeLockKeeper((w) => this.update({ wakeLock: w }));
     document.addEventListener('visibilitychange', this.onVisibility);
   }
@@ -169,6 +178,7 @@ export class DriveController {
     const f = this.snap.lastFix;
     const age = f ? Date.now() - f.timestamp : Infinity;
     if (this.snap.nextManeuver && (age > 5000 || age < -5000 || this.progress.status !== 'active')) this.update({ nextManeuver: null });
+    this.computeNav();
   }
 
   async startOrResume() {
@@ -181,13 +191,19 @@ export class DriveController {
       this.update({ plan: null, nextManeuver: null, cursor: 0, notice: 'none' });
     }
     this.matcher = initialMatcherState();
-    this.gps.start();
+    locationHub.start();
+    if (!this.unsubFix) this.unsubFix = locationHub.onFix((o) => this.onFix(o));
+    // Use the fix the shared source already has (the browser may not report again while still).
+    const last = locationHub.last;
+    if (last && Date.now() - last.timestamp < 10_000) this.onFix({ ...last, ageMs: Date.now() - last.timestamp, observationId: `${last.observationId}:resume` });
     void this.wake.acquire();
     this.recompute();
   }
 
   async pause() {
-    this.gps.stop();
+    this.unsubFix?.();
+    this.unsubFix = null;
+    this.voice.stop();
     const fin = finalizeMatcher(this.gi, this.matcher);
     this.matcher = fin.state;
     await this.persist([...fin.traversals.map((t) => ({ type: 'traversal_confirmed' as const, payload: { traversal: t } })), { type: 'paused', payload: {} }], { status: 'paused' });
@@ -197,7 +213,9 @@ export class DriveController {
   }
 
   async end() {
-    this.gps.stop();
+    this.unsubFix?.();
+    this.unsubFix = null;
+    this.voice.stop();
     const fin = finalizeMatcher(this.gi, this.matcher);
     await this.persist([...fin.traversals.map((t) => ({ type: 'traversal_confirmed' as const, payload: { traversal: t } })), { type: 'ended', payload: {} }], { status: 'ended' });
     await this.wake.release();
@@ -206,7 +224,10 @@ export class DriveController {
 
   dispose() {
     clearInterval(this.timer);
-    this.gps.stop();
+    this.unsubFix?.();
+    this.unsubFix = null;
+    this.unsubState();
+    this.voice.stop();
     void this.wake.release();
     document.removeEventListener('visibilitychange', this.onVisibility);
   }
@@ -244,6 +265,23 @@ export class DriveController {
     this.update({ lastFix: o, quality: res.quality, matched: res.matched, trail });
     if (res.traversals.length) this.recompute();
     this.guide(res.matched, reliable);
+    this.computeNav();
+  }
+
+  setVoice(on: boolean) {
+    this.voice.enabled = on;
+    if (!on) this.voice.stop();
+    this.update({ voiceOn: on });
+  }
+
+  private computeNav() {
+    // Guidance may use the newest fix from the shared source even if the matcher hasn't seen it.
+    const a = this.snap.lastFix, b = locationHub.last;
+    const f = a && b ? (b.timestamp > a.timestamp ? b : a) : a ?? b;
+    const usable = this.progress.status === 'active' && this.planValid && !this.snap.pendingOutsidePlan && !this.snap.replanning;
+    const nav = usable ? this.navEngine.compute(this.gi, this.snap.plan, this.maneuvers, this.stepDist, f, f ? Date.now() - f.timestamp : Infinity, Date.now()) : null;
+    this.update({ nav });
+    this.voice.announce(nav);
   }
 
   private guide(matched: DriveSnapshot['matched'], reliable: boolean) {
@@ -343,6 +381,7 @@ export class DriveController {
     this.maneuvers = buildManeuvers(this.gi, plan);
     this.stepDist = stepStartDistances(plan);
     this.guidance = initialGuidance(plan);
+    this.navEngine.reset();
     this.update({ plan, planValid: valid, cursor: 0, notice: 'none', pendingOutsidePlan: null });
   }
 

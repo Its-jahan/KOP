@@ -24,6 +24,7 @@ export class MapView {
   private centerMarker: Marker | null = null;
   private startMarker: Marker | null = null;
   private clickHandler: ((p: LonLat) => void) | null = null;
+  private userPanHandler: (() => void) | null = null;
 
   constructor(container: HTMLElement) {
     // Start from the last viewed area (per device) or a neutral world view; never a fixed city.
@@ -51,6 +52,7 @@ export class MapView {
     this.map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     this.map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     this.map.on('click', (e) => this.clickHandler?.([e.lngLat.lng, e.lngLat.lat]));
+    this.map.on('dragstart', () => this.userPanHandler?.());
     this.map.on('moveend', () => {
       try {
         const c = this.map.getCenter();
@@ -73,6 +75,33 @@ export class MapView {
     this.clickHandler = h;
   }
 
+  onUserPan(h: (() => void) | null) {
+    this.userPanHandler = h;
+  }
+
+  /** Driving camera: heading-up, tilted, vehicle in the lower part of the screen. */
+  follow(p: LonLat, heading: number | null, driving: boolean) {
+    const h = this.map.getContainer().clientHeight;
+    this.map.easeTo({
+      center: p,
+      zoom: driving ? 17.3 : Math.max(this.map.getZoom(), 16),
+      bearing: driving && heading !== null ? heading : this.map.getBearing(),
+      pitch: driving ? 45 : 0,
+      padding: driving ? { top: h * 0.4, bottom: 0, left: 0, right: 0 } : { top: 0, bottom: 0, left: 0, right: 0 },
+      duration: 800,
+    });
+  }
+
+  /** De-emphasise the coverage network while driving so the guided route stands out. */
+  setDriving(driving: boolean) {
+    const m = this.map;
+    if (!m.getLayer('reqs-line')) return;
+    for (const id of ['reqs-line', 'reqs-line-dashed', 'covered-line']) m.setPaintProperty(id, 'line-opacity', driving ? 0.45 : 1);
+    m.setLayoutProperty('reqs-arrows', 'visibility', driving ? 'none' : 'visible');
+    m.setPaintProperty('route-line', 'line-opacity', driving ? 0.15 : 0.35);
+    if (!driving) this.map.easeTo({ pitch: 0, bearing: 0, padding: { top: 0, bottom: 0, left: 0, right: 0 }, duration: 400 });
+  }
+
   private setup() {
     const m = this.map;
     // arrow icon for direction
@@ -93,8 +122,26 @@ export class MapView {
     ctx.fill();
     ctx.stroke();
     m.addImage('arrow', ctx.getImageData(0, 0, size, size), { pixelRatio: 2 });
+    // vehicle / heading marker
+    const vs = 64;
+    const vc = document.createElement('canvas');
+    vc.width = vs;
+    vc.height = vs;
+    const v = vc.getContext('2d')!;
+    v.beginPath();
+    v.moveTo(vs * 0.5, vs * 0.06);
+    v.lineTo(vs * 0.88, vs * 0.9);
+    v.lineTo(vs * 0.5, vs * 0.7);
+    v.lineTo(vs * 0.12, vs * 0.9);
+    v.closePath();
+    v.fillStyle = '#1e88e5';
+    v.fill();
+    v.lineWidth = 5;
+    v.strokeStyle = '#ffffff';
+    v.stroke();
+    m.addImage('vehicle', v.getImageData(0, 0, vs, vs), { pixelRatio: 2 });
 
-    for (const id of ['zone', 'reqs', 'covered', 'route', 'pos', 'trail']) m.addSource(id, { type: 'geojson', data: empty() });
+    for (const id of ['zone', 'reqs', 'covered', 'route', 'pos', 'trail', 'ahead']) m.addSource(id, { type: 'geojson', data: empty() });
     m.addLayer({ id: 'zone-fill', type: 'fill', source: 'zone', paint: { 'fill-color': '#1c7ed6', 'fill-opacity': 0.08 } });
     m.addLayer({ id: 'zone-line', type: 'line', source: 'zone', paint: { 'line-color': '#1c7ed6', 'line-width': 2, 'line-dasharray': [2, 1] } });
     const offset: maplibregl.ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 13, 1, 16, 3, 19, 7];
@@ -129,9 +176,19 @@ export class MapView {
       },
     });
     m.addLayer({ id: 'trail', type: 'line', source: 'trail', paint: { 'line-color': '#212529', 'line-width': 1, 'line-opacity': 0.5 } });
+    m.addLayer({ id: 'ahead-casing', type: 'line', source: 'ahead', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#0d47a1', 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 7, 18, 20] } });
+    m.addLayer({ id: 'ahead-line', type: 'line', source: 'ahead', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#42a5f5', 'line-width': ['interpolate', ['linear'], ['zoom'], 13, 4, 18, 14] } });
+    m.addLayer({
+      id: 'ahead-arrows', type: 'symbol', source: 'ahead',
+      layout: { 'symbol-placement': 'line', 'symbol-spacing': 80, 'icon-image': 'arrow', 'icon-size': 1.1, 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-rotation-alignment': 'map' },
+    });
     m.addLayer({ id: 'pos-acc', type: 'fill', source: 'pos', filter: ['==', ['get', 'kind'], 'accuracy'], paint: { 'fill-color': '#1c7ed6', 'fill-opacity': 0.15 } });
     m.addLayer({
-      id: 'pos-dot', type: 'circle', source: 'pos', filter: ['==', ['get', 'kind'], 'dot'],
+      id: 'pos-heading', type: 'symbol', source: 'pos', filter: ['all', ['==', ['get', 'kind'], 'dot'], ['>=', ['get', 'heading'], 0]],
+      layout: { 'icon-image': 'vehicle', 'icon-size': 1, 'icon-rotate': ['get', 'heading'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true },
+    });
+    m.addLayer({
+      id: 'pos-dot', type: 'circle', source: 'pos', filter: ['all', ['==', ['get', 'kind'], 'dot'], ['<', ['get', 'heading'], 0]],
       paint: {
         'circle-radius': 8,
         'circle-color': ['match', ['get', 'quality'], 'reliable', '#1c7ed6', '#868e96'],
@@ -144,7 +201,7 @@ export class MapView {
     return this.map.getSource(id) as GeoJSONSource | undefined;
   }
 
-  async setData(id: 'zone' | 'reqs' | 'covered' | 'route' | 'pos' | 'trail', fc: FC) {
+  async setData(id: 'zone' | 'reqs' | 'covered' | 'route' | 'pos' | 'trail' | 'ahead', fc: FC) {
     await this.ready;
     this.src(id)?.setData(fc);
   }
