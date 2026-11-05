@@ -17,8 +17,8 @@ android {
         // is unknown, so the lowest level every dependency supports is used.
         minSdk = 21
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.2.0-fieldtest"
+        versionCode = 5
+        versionName = "0.3.0-fieldtest"
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
         }

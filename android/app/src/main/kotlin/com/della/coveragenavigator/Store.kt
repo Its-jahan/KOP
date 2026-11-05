@@ -29,7 +29,7 @@ data class StoredSession(
     val ended: Boolean,
 )
 
-class Store(context: Context) : SQLiteOpenHelper(context.applicationContext, "coverage.db", null, 1) {
+class Store(context: Context) : SQLiteOpenHelper(context.applicationContext, "coverage.db", null, 2) {
     private val context: Context = context.applicationContext
     init {
         setWriteAheadLoggingEnabled(true)
@@ -40,10 +40,16 @@ class Store(context: Context) : SQLiteOpenHelper(context.applicationContext, "co
         db.execSQL("CREATE TABLE sessions (session_id TEXT PRIMARY KEY, content_hash TEXT NOT NULL, base_json TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, ended INTEGER NOT NULL DEFAULT 0)")
         db.execSQL("CREATE TABLE events (session_id TEXT NOT NULL, seq INTEGER NOT NULL, event_id TEXT NOT NULL UNIQUE, type TEXT NOT NULL, body BLOB NOT NULL, PRIMARY KEY (session_id, seq))")
         db.execSQL("CREATE TABLE checkpoints (session_id TEXT PRIMARY KEY, seq INTEGER NOT NULL, checksum TEXT NOT NULL, updated_at INTEGER NOT NULL)")
+        createSettings(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Version 1 only.
+        // v2: key/value settings (the active monthly-plan campaign).
+        if (oldVersion < 2) createSettings(db)
+    }
+
+    private fun createSettings(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL)")
     }
 
     private val graphDir: File get() = File(context.filesDir, "graphs").apply { mkdirs() }
@@ -185,13 +191,40 @@ class Store(context: Context) : SQLiteOpenHelper(context.applicationContext, "co
             if (c.moveToFirst()) StoredSession(c.getString(0), c.getString(1), c.getString(2), c.getLong(3), c.getLong(4), false) else null
         }
 
+    /** All sessions (newest first) with their base JSON, for campaign-day lookup. */
+    fun allSessions(): List<StoredSession> {
+        val out = ArrayList<StoredSession>()
+        readableDatabase.rawQuery("SELECT session_id, content_hash, base_json, created_at, updated_at, ended FROM sessions ORDER BY updated_at DESC", null).use { c ->
+            while (c.moveToNext()) out.add(StoredSession(c.getString(0), c.getString(1), c.getString(2), c.getLong(3), c.getLong(4), c.getInt(5) != 0))
+        }
+        return out
+    }
+
+    // ---------------- settings (key/value) ----------------
+
+    fun getSetting(key: String): String? =
+        readableDatabase.rawQuery("SELECT value FROM settings WHERE key=?", arrayOf(key)).use { c -> if (c.moveToFirst()) c.getString(0) else null }
+
+    /** Stores (or with null removes) a setting in one durable write. */
+    fun setSetting(key: String, value: String?) {
+        if (value == null) {
+            writableDatabase.delete("settings", "key=?", arrayOf(key))
+            return
+        }
+        writableDatabase.insertWithOnConflict("settings", null, ContentValues().apply {
+            put("key", key)
+            put("value", value)
+            put("updated_at", System.currentTimeMillis())
+        }, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
     fun sessionCount(): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM sessions", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
 
     fun markEnded(sessionId: String) {
         writableDatabase.update("sessions", ContentValues().apply { put("ended", 1) }, "session_id=?", arrayOf(sessionId))
     }
 
-    /** Deletes every local session, event, checkpoint and cached graph. */
+    /** Deletes every local session, event, checkpoint, cached graph and the monthly plan. */
     fun deleteAll() {
         val db = writableDatabase
         db.beginTransaction()
@@ -200,6 +233,7 @@ class Store(context: Context) : SQLiteOpenHelper(context.applicationContext, "co
             db.delete("checkpoints", null, null)
             db.delete("sessions", null, null)
             db.delete("graphs", null, null)
+            db.delete("settings", null, null)
             db.setTransactionSuccessful()
         } finally {
             db.endTransaction()

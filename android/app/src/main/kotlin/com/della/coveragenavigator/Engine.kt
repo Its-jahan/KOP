@@ -7,6 +7,17 @@ import android.content.Context
 import android.os.SystemClock
 import della.core.ApplyContext
 import della.core.BoundaryPolicy
+import della.core.Campaign
+import della.core.CampaignHome
+import della.core.CampaignJson
+import della.core.CampaignPlan
+import della.core.CampaignSettings
+import della.core.Interval
+import della.core.campaignDayPlan
+import della.core.confirmDay
+import della.core.newlyDriven
+import della.core.planCampaign
+import della.core.undoLastDay
 import della.core.Checkpoint
 import della.core.ContractJson
 import della.core.CoverageSession
@@ -97,6 +108,7 @@ import kotlin.coroutines.coroutineContext
 import kotlin.math.max
 
 const val MAX_GRAPH_EDGES = 60_000
+private const val CAMPAIGN_KEY = "campaign"
 
 fun isoNow(t: Long = System.currentTimeMillis()): String =
     SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.ROOT).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(t))
@@ -186,6 +198,7 @@ class Engine(private val appContext: Context, private val store: Store) {
 
     init {
         scope.launch { checkRecovery() }
+        scope.launch { loadCampaign() }
         scope.launch {
             while (isActive) {
                 delay(1000)
@@ -204,7 +217,10 @@ class Engine(private val appContext: Context, private val store: Store) {
 
     // ===================================================== preparation
 
-    fun setScreen(s: Screen) = post { _ui.update { it.copy(screen = s) } }
+    fun setScreen(s: Screen) = post {
+        _ui.update { it.copy(screen = s) }
+        if (s == Screen.CAMPAIGN) refreshCampaignReview()
+    }
     fun setTapMode(m: TapMode) = post { _ui.update { it.copy(tapMode = m) } }
     fun setFollow(f: Boolean) = post { _ui.update { it.copy(follow = f) } }
 
@@ -660,15 +676,33 @@ class Engine(private val appContext: Context, private val store: Store) {
         true
     }
 
-    private fun encodeBase(b: SessionBase, lab: Boolean, imported: Boolean = false): String = ContractJson.stringify(
+    private fun encodeBase(b: SessionBase, lab: Boolean, imported: Boolean = false, day: CampaignTag? = null): String = ContractJson.stringify(
         ContractJson.obj(
             "sessionId" to JsonPrimitive(b.sessionId), "graphId" to JsonPrimitive(b.graphId), "contentHash" to JsonPrimitive(b.contentHash),
             "zone" to ContractJson.encodeZone(b.zone), "vehicleProfile" to JsonPrimitive(b.vehicleProfile), "boundaryPolicy" to JsonPrimitive(b.boundaryPolicy),
             "returnToStart" to JsonPrimitive(b.returnToStart),
             "startSelection" to (ContractJson.encodeSession(dummySession(b)) ["startSelection"]!!),
             "createdAt" to JsonPrimitive(b.createdAt), "lab" to JsonPrimitive(lab), "imported" to JsonPrimitive(imported),
-        ),
+        ).let { o ->
+            if (day == null) o
+            else JsonObject(o + mapOf("campaignId" to JsonPrimitive(day.campaignId), "campaignDay" to JsonPrimitive(day.day), "requirementIds" to ContractJson.strs(day.requirementIds)))
+        },
     )
+
+    /** Campaign-day marker stored with a session (web SessionHeader.campaignId). */
+    private class CampaignTag(val campaignId: String, val day: Int, val requirementIds: List<String>)
+
+    private fun campaignTag(json: String): CampaignTag? = try {
+        val o = ContractJson.parse(json) as JsonObject
+        val id = (o["campaignId"] as? JsonPrimitive)?.content
+        if (id == null) null
+        else CampaignTag(
+            id, (o["campaignDay"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0,
+            (o["requirementIds"] as? kotlinx.serialization.json.JsonArray)?.map { (it as JsonPrimitive).content } ?: emptyList(),
+        )
+    } catch (e: Exception) {
+        null
+    }
 
     private fun dummySession(b: SessionBase) = CoverageSession(
         della.core.SCHEMA_VERSION, b.sessionId, b.graphId, b.contentHash, b.zone, b.vehicleProfile, b.boundaryPolicy, b.returnToStart,
@@ -796,6 +830,7 @@ class Engine(private val appContext: Context, private val store: Store) {
         a.replanJob?.cancel()
         a.pendingOutsidePlan = null
         publishDrive(a, forceMap = true)
+        refreshCampaignReview()
     }
 
     /** Leave the ended session and return to preparation. */
@@ -1147,9 +1182,11 @@ class Engine(private val appContext: Context, private val store: Store) {
         // (observations redacted by the exporter), so they only require strictly increasing seq.
         val rec = if (isImported(stored.baseJson)) recoverIncreasing(sessionId, records) else recoverEventLog(sessionId, StorageImage(cp, records))
         if (rec.discarded.isNotEmpty()) withContext(Dispatchers.IO) { store.truncateAfter(sessionId, rec.lastValidSeq) }
+        val tag = campaignTag(stored.baseJson)
         val built = withContext(Dispatchers.Default) {
             val gi = GraphIndex(graph)
-            gi to computeRequirements(gi, base.zone.definition)
+            val full = computeRequirements(gi, base.zone.definition)
+            Triple(gi, if (tag != null) dayRequirements(full, tag.requirementIds.toHashSet()) else full, full)
         }
         val progress = applyEvents(emptyProgress(), rec.events, ApplyContext(sessionId, graph.contentHash, graph.directedEdges.associate { it.edgeId to it.lengthMm / 1000.0 }))
         val a = Active(sessionId, base, graph, built.first, built.second, lab, rec.lastValidSeq, progress)
@@ -1159,7 +1196,7 @@ class Engine(private val appContext: Context, private val store: Store) {
         }
         retire(active)
         active = a
-        prepared = Prepared(graph, built.first, base.zone.definition, built.second, store.graphEndpoint(graph.contentHash))
+        prepared = Prepared(graph, built.first, base.zone.definition, built.third, store.graphEndpoint(graph.contentHash))
         // Found 'active' after a process death / reboot: record it as paused (interrupted).
         // It resumes only by an explicit user action, with a fresh plan from the real position.
         if (progress.status == "active") commit(a, listOf(ev(a, EventType.PAUSED, ContractJson.obj("reason" to JsonPrimitive("interrupted")))))
@@ -1252,6 +1289,11 @@ class Engine(private val appContext: Context, private val store: Store) {
         retire(active)
         active = null
         withContext(Dispatchers.IO) { store.deleteAll() }
+        campaignJob?.cancel()
+        campaign = null
+        campaignCtx = null
+        campaignPlan = null
+        campaignReview = null
         invalidateGraph()
         _ui.update { UiState(zone = it.zone, layers = MapLayers(zone = it.layers.zone)) }
         toast(R.string.msg_deleted)
@@ -1267,6 +1309,315 @@ class Engine(private val appContext: Context, private val store: Store) {
             p?.let { append("graph ").append(it.graph.graphId).append(" edges ").append(it.graph.directedEdges.size).append('\n') }
             a?.let { append("session ").append(it.sessionId).append(" seq ").append(it.seq).append(" status ").append(it.progress.status).append('\n') }
         }
+    }
+
+
+    // ===================================================== monthly plan (multi-day campaign)
+    // Port of the campaign part of web/src/ui/App.tsx + CampaignPage.tsx. One active campaign
+    // is persisted in the settings table; its day sessions carry the campaign id in base_json.
+
+    private class CampaignCtx(val graph: GraphSnapshot, val gi: GraphIndex, val req: RequirementsResult)
+    private class PendingReview(val sessionId: String, val day: Int?, val driven: Map<String, List<Interval>>)
+
+    private var campaign: Campaign? = null
+    private var campaignCtx: CampaignCtx? = null
+    private var campaignPlan: CampaignPlan? = null
+    private var campaignReview: PendingReview? = null
+    private var campaignError: String? = null
+    private var campaignJob: Job? = null
+
+    private fun dayRequirements(full: RequirementsResult, ids: Set<String>) =
+        RequirementsResult(full.zoneInfo, full.requirements.filter { it.requirementId in ids }, full.ignoredSlivers, full.ignoredSliverMeters)
+
+    private suspend fun loadCampaign() {
+        val text = try {
+            withContext(Dispatchers.IO) { store.getSetting(CAMPAIGN_KEY) }
+        } catch (e: Exception) {
+            null
+        }
+        if (text == null) {
+            publishCampaign()
+            return
+        }
+        val c = try {
+            CampaignJson.decode(ContractJson.parse(text))
+        } catch (e: Exception) {
+            null
+        }
+        if (c == null) {
+            campaignError = "corrupt"
+            publishCampaign()
+            return
+        }
+        campaign = c
+        refreshCampaign()
+    }
+
+    /** (Re)load the campaign graph if needed, re-plan the remaining days and the review. */
+    private fun refreshCampaign() {
+        val c = campaign
+        campaignJob?.cancel()
+        if (c == null) {
+            publishCampaign()
+            return
+        }
+        campaignError = null
+        _ui.update { it.copy(campaign = it.campaign.copy(exists = true, loading = true, error = null)) }
+        campaignJob = scope.launch {
+            var ctx = campaignCtx
+            if (ctx == null || ctx.graph.contentHash != c.contentHash) {
+                val graph = withContext(Dispatchers.IO) { store.loadGraph(c.contentHash) }
+                if (graph == null || graph.contentHash != c.contentHash || !withContext(Dispatchers.Default) { della.core.verifyGraphHash(graph) }) {
+                    campaignError = "graph_missing"
+                    publishCampaign()
+                    return@launch
+                }
+                ctx = withContext(Dispatchers.Default) {
+                    val gi = GraphIndex(graph)
+                    CampaignCtx(graph, gi, computeRequirements(gi, c.zone))
+                }
+                campaignCtx = ctx
+            }
+            val cx = ctx
+            val plan = withContext(Dispatchers.Default) {
+                val job = coroutineContext[Job]
+                planCampaign(cx.gi, cx.req.zoneInfo, cx.req.requirements, c, "c-" + UUID.randomUUID().toString().take(8), isoNow(), shouldCancel = { job?.isActive == false })
+            }
+            if (campaign !== c) return@launch
+            campaignPlan = plan
+            loadReview(c, cx)
+            publishCampaign()
+        }
+    }
+
+    /** End-of-day review: the newest campaign session not yet confirmed (web: campaign review effect). */
+    private fun refreshCampaignReview() {
+        val c = campaign ?: return
+        val ctx = campaignCtx ?: return
+        if (campaignJob?.isActive == true) return // a running refresh reloads the review at its end
+        scope.launch {
+            loadReview(c, ctx)
+            if (campaign === c) publishCampaign()
+        }
+    }
+
+    private suspend fun loadReview(c: Campaign, ctx: CampaignCtx) {
+        val sessions = try {
+            withContext(Dispatchers.IO) { store.allSessions() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val done = c.history.map { it.sessionId }.toHashSet()
+        var pending: StoredSession? = null
+        var tag: CampaignTag? = null
+        for (s in sessions) {
+            val t = campaignTag(s.baseJson) ?: continue
+            if (t.campaignId == c.campaignId && s.sessionId !in done) {
+                pending = s
+                tag = t
+                break
+            }
+        }
+        if (pending == null) {
+            campaignReview = null
+            return
+        }
+        val records = withContext(Dispatchers.IO) { store.eventRecords(pending.sessionId) }
+        val events = recoverEventLog(pending.sessionId, StorageImage(null, records)).events
+        val prog = applyEvents(emptyProgress(), events, ApplyContext(pending.sessionId, ctx.graph.contentHash, ctx.graph.directedEdges.associate { it.edgeId to it.lengthMm / 1000.0 }))
+        campaignReview = if (prog.traversals.isNotEmpty()) PendingReview(pending.sessionId, tag?.day, LinkedHashMap(prog.union)) else null
+    }
+
+    private fun publishCampaign() {
+        val c = campaign
+        if (c == null) {
+            _ui.update { it.copy(campaign = CampaignUi(error = campaignError)) }
+            return
+        }
+        val ctx = campaignCtx
+        val plan = campaignPlan
+        val base = CampaignUi(
+            exists = true, loading = campaignJob?.isActive == true && campaignError == null, error = campaignError, name = c.name,
+            hoursPerDay = c.settings.hoursPerDay, speedKmh = c.settings.speedKmh,
+            history = c.history.map { CampaignHistoryUi(it.date, it.confirmedMeters) },
+        )
+        if (ctx == null || plan == null) {
+            _ui.update { it.copy(campaign = base.copy(loading = campaignError == null)) }
+            return
+        }
+        val conf = c.confirmed.toMap()
+        var total = 0.0
+        var done = 0.0
+        for (r in ctx.req.requirements) {
+            if (r.status == "needsReview") continue
+            total += r.lengthMeters
+            for (iv in conf[r.edgeId] ?: emptyList()) done += max(0.0, minOf(iv.b, r.endOffsetMeters) - maxOf(iv.a, r.startOffsetMeters))
+        }
+        done = minOf(done, total)
+        val review = campaignReview?.let { rv ->
+            val reqs = newlyDriven(ctx.req.requirements, conf, rv.driven)
+            val groups = LinkedHashMap<String, MutableList<della.core.RequiredInterval>>()
+            for (r in reqs) {
+                val i = ctx.gi.idx[r.edgeId]
+                val n = if (i == null) r.edgeId else ctx.gi.edges[i].names["default"] ?: ctx.gi.edges[i].names["en"] ?: "—"
+                groups.getOrPut(n) { ArrayList() }.add(r)
+            }
+            CampaignReviewUi(
+                rv.sessionId, rv.day,
+                groups.entries.sortedByDescending { it.value.size }.map { (n, rs) -> StreetGroupUi(n, rs.map { it.requirementId }, rs.sumOf { it.lengthMeters }) },
+            )
+        }
+        _ui.update {
+            it.copy(
+                campaign = base.copy(
+                    loading = false, percentDone = if (total > 0) 100 * done / total else 0.0, doneMeters = done, remainingMeters = plan.remainingMeters,
+                    unplannable = plan.unplannable.size,
+                    days = plan.days.map { d -> CampaignDayUi(c.history.size + d.day, d.totalMeters, d.minutes, d.targetIds.size) },
+                    review = review,
+                ),
+            )
+        }
+    }
+
+    private suspend fun saveCampaign(c: Campaign?): Boolean {
+        try {
+            withContext(Dispatchers.IO) { store.setSetting(CAMPAIGN_KEY, c?.let { ContractJson.stringify(CampaignJson.encode(it)) }) }
+        } catch (e: Exception) {
+            toast(R.string.msg_storage_error, e.javaClass.simpleName)
+            return false
+        }
+        campaign = c
+        campaignPlan = null
+        campaignReview = null
+        refreshCampaign()
+        return true
+    }
+
+    /** Create the campaign from the prepared area and the confirmed start point (= fixed home). */
+    fun createCampaign(hoursPerDay: Double, speedKmh: Double, name: String) = post {
+        val p = prepared ?: return@post
+        val s = snapped ?: return@post
+        if (!_ui.value.start.confirmed || p.graph.dataState != "available" || hoursPerDay <= 0 || speedKmh <= 0) return@post
+        try {
+            withContext(Dispatchers.IO) { store.saveGraph(p.graph, p.endpoint) }
+        } catch (e: Exception) {
+            toast(R.string.msg_storage_error, e.javaClass.simpleName)
+            return@post
+        }
+        val c = Campaign(
+            campaignId = "c-" + UUID.randomUUID().toString(), name = name, createdAt = isoNow(), graphId = p.graph.graphId, contentHash = p.graph.contentHash,
+            zone = p.zone, policy = policy, home = CampaignHome(_ui.value.start.requested ?: s.position, s.edgeId, s.offsetMeters),
+            settings = CampaignSettings(hoursPerDay, speedKmh), confirmed = emptyList(), history = emptyList(),
+        )
+        campaignCtx = CampaignCtx(p.graph, p.gi, p.req)
+        saveCampaign(c)
+    }
+
+    /** Confirm the reviewed day; requirement IDs in `unchecked` were not really driven. Re-plans the rest. */
+    fun confirmCampaignDay(unchecked: Set<String>) = post {
+        val c = campaign ?: return@post
+        val ctx = campaignCtx ?: return@post
+        val rv = campaignReview ?: return@post
+        val ok = newlyDriven(ctx.req.requirements, c.confirmed.toMap(), rv.driven).filter { it.requirementId !in unchecked }
+        saveCampaign(confirmDay(c, ok, rv.driven, rv.sessionId, isoNow()))
+    }
+
+    fun undoCampaignDay() = post {
+        val c = campaign ?: return@post
+        val ctx = campaignCtx ?: return@post
+        if (c.history.isEmpty()) return@post
+        saveCampaign(undoLastDay(c, ctx.req.requirements))
+    }
+
+    fun deleteCampaign() = post {
+        if (saveCampaign(null)) {
+            campaignCtx = null
+            campaignError = null
+            publishCampaign()
+        }
+    }
+
+    /** Draw one day's route (approach + coverage) on the map and fit it. */
+    fun showCampaignDay(index: Int) = post {
+        val plan = campaignPlan ?: return@post
+        val ctx = campaignCtx ?: return@post
+        val d = plan.days.getOrNull(index) ?: return@post
+        val rp = campaignDayPlan(plan, index, ctx.req.requirements, "p-" + UUID.randomUUID().toString().take(8), isoNow())
+        val b = d.bbox
+        _ui.update {
+            it.copy(
+                screen = Screen.PREPARE,
+                layers = it.layers.copy(plan = GeoJson.plan(ctx.gi, rp)),
+                camera = CameraCmd(++cameraSeq, b.south, b.west, b.north, b.east),
+            )
+        }
+    }
+
+    /**
+     * Start a session for one campaign day: requirements = that day's targets only, plan =
+     * approach from home + that day's steps (web driveCampaignDay). Caller starts the service.
+     */
+    suspend fun startCampaignDay(index: Int): Boolean = withContext(dispatcher) {
+        val c = campaign
+        val ctx = campaignCtx
+        val plan = campaignPlan
+        if (c == null || ctx == null || plan == null) return@withContext false
+        val d = plan.days.getOrNull(index) ?: return@withContext false
+        val cur = active
+        if (cur != null) {
+            if (cur.progress.status == "ended" && cur.pendingWrites.isEmpty()) {
+                retire(cur)
+                active = null
+            } else {
+                toast(R.string.msg_campaign_session_open)
+                return@withContext false
+            }
+        }
+        val labOn = _ui.value.labMode
+        val sessionId = "s-" + UUID.randomUUID().toString()
+        val dayNo = c.history.size + 1
+        val rp = campaignDayPlan(plan, index, ctx.req.requirements, "p-" + UUID.randomUUID().toString().take(8), isoNow())
+        val home = SnappedStart(c.home.edgeId, c.home.offsetMeters, c.home.requested, 0.0)
+        val base = SessionBase(
+            sessionId = sessionId, graphId = c.graphId, contentHash = c.contentHash, zone = Zone(c.campaignId, 1, c.zone),
+            // Driving to and from home may leave the zone; the day route is fixed by the campaign plan.
+            vehicleProfile = "passenger_car", boundaryPolicy = c.policy, returnToStart = false,
+            startSelection = StartSelection(c.home.requested, home, true), createdAt = isoNow(),
+        )
+        val approvedOutside = rp.totals.outsideMeters + d.approachMeters
+        val now = System.currentTimeMillis()
+        val events = listOf(
+            SessionEvent("$sessionId:1", 1, sessionId, EventType.SESSION_CREATED, now, della.core.SCHEMA_VERSION,
+                ContractJson.obj(
+                    "appVersion" to JsonPrimitive(BuildConfig.VERSION_NAME), "lab" to JsonPrimitive(labOn), "endpoint" to ContractJson.str(store.graphEndpoint(c.contentHash)),
+                    "approvedOutsideMeters" to ContractJson.num(approvedOutside), "campaignId" to JsonPrimitive(c.campaignId), "day" to JsonPrimitive(dayNo),
+                )),
+            SessionEvent("$sessionId:2", 2, sessionId, EventType.START_CONFIRMED, now, della.core.SCHEMA_VERSION,
+                ContractJson.obj("edgeId" to JsonPrimitive(c.home.edgeId), "offsetMeters" to ContractJson.num(c.home.offsetMeters))),
+            SessionEvent("$sessionId:3", 3, sessionId, EventType.PLAN_ACCEPTED, now, della.core.SCHEMA_VERSION,
+                ContractJson.obj("plan" to ContractJson.encodePlan(rp), "reason" to JsonPrimitive("campaign_day"))),
+        )
+        try {
+            store.createSession(sessionId, c.contentHash, encodeBase(base, labOn, day = CampaignTag(c.campaignId, dayNo, d.targetIds)), events)
+        } catch (e: Exception) {
+            toast(R.string.msg_storage_error, e.javaClass.simpleName)
+            return@withContext false
+        }
+        val req = dayRequirements(ctx.req, d.targetIds.toHashSet())
+        val progress = applyEvents(emptyProgress(), events, ApplyContext(sessionId, c.contentHash, ctx.graph.directedEdges.associate { it.edgeId to it.lengthMm / 1000.0 }))
+        val a = Active(sessionId, base, ctx.graph, ctx.gi, req, labOn, 3, progress)
+        a.acceptedRev = rp.planningRevision
+        a.latestRequestedRev = rp.planningRevision
+        a.approvedOutsideMeters = approvedOutside
+        installPlan(a, rp, true)
+        active = a
+        lastStorageCheckpoint(a)
+        val ring = zoneRing(c.zone)
+        _ui.update { it.copy(screen = Screen.DRIVE, follow = true, layers = it.layers.copy(zone = GeoJson.zone(ring, emptyList(), true), markers = GeoJson.EMPTY)) }
+        publishDrive(a, forceMap = true)
+        if (labOn) startLab(a)
+        refreshCampaignReview()
+        true
     }
 
     // ===================================================== LAB MODE (debug builds only)

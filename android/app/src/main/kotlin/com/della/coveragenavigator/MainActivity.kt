@@ -218,6 +218,18 @@ class MainActivity : ComponentActivity() {
             lifecycleScope.launch { engine.startSession() }
         }
 
+        override fun startCampaignDay(index: Int) {
+            if (engine.ui.value.labMode) {
+                lifecycleScope.launch { engine.startCampaignDay(index) }
+                return
+            }
+            withLocationPermission {
+                lifecycleScope.launch {
+                    if (engine.startCampaignDay(index) && !engine.isLabSession()) LocationService.start(this@MainActivity)
+                }
+            }
+        }
+
         override fun resume() {
             val go = {
                 lifecycleScope.launch {
@@ -258,6 +270,8 @@ class MainActivity : ComponentActivity() {
 interface AppActions {
     fun startNavigation()
     fun startLabNavigation()
+    /** Start the session for one day of the monthly plan (index into the remaining days). */
+    fun startCampaignDay(index: Int)
     fun resume()
     fun pause()
     fun end()

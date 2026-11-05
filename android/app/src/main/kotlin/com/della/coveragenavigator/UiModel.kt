@@ -4,7 +4,7 @@ package com.della.coveragenavigator
 import della.core.CoverageMetrics
 import della.core.LonLat
 
-enum class Screen { PREPARE, DRIVE, DIAGNOSTICS, SETTINGS, SESSIONS }
+enum class Screen { PREPARE, DRIVE, DIAGNOSTICS, SETTINGS, SESSIONS, CAMPAIGN }
 enum class ZoneMode { POLYGON, CIRCLE }
 enum class TapMode { ZONE, START }
 
@@ -148,6 +148,41 @@ data class CameraCmd(
     val bearing: Double? = null, val tilt: Double? = null, val follow: Boolean = false,
 )
 
+// ---------- monthly plan (multi-day campaign) ----------
+
+data class CampaignDayUi(
+    /** Day number across the whole campaign (confirmed days + position in the remaining plan). */
+    val dayNo: Int,
+    val totalMeters: Double,
+    val minutes: Long,
+    val segments: Int,
+)
+
+data class StreetGroupUi(val name: String, val requirementIds: List<String>, val meters: Double)
+
+/** End-of-day review of the newest campaign session not yet confirmed. */
+data class CampaignReviewUi(val sessionId: String, val day: Int?, val groups: List<StreetGroupUi>)
+
+data class CampaignHistoryUi(val date: String, val meters: Double)
+
+data class CampaignUi(
+    val exists: Boolean = false,
+    /** Graph / plan being (re)computed. */
+    val loading: Boolean = false,
+    /** graph_missing | corrupt | storage */
+    val error: String? = null,
+    val name: String = "",
+    val hoursPerDay: Double = 4.0,
+    val speedKmh: Double = 14.0,
+    val percentDone: Double = 0.0,
+    val doneMeters: Double = 0.0,
+    val remainingMeters: Double = 0.0,
+    val unplannable: Int = 0,
+    val days: List<CampaignDayUi> = emptyList(),
+    val history: List<CampaignHistoryUi> = emptyList(),
+    val review: CampaignReviewUi? = null,
+)
+
 data class RecoveryOffer(val sessionId: String, val createdAt: Long, val updatedAt: Long, val lab: Boolean)
 
 data class UiState(
@@ -176,4 +211,5 @@ data class UiState(
     val myLocation: MyLocation? = null,
     /** idle | active | permission_denied | location_disabled */
     val myLocationState: String = "idle",
+    val campaign: CampaignUi = CampaignUi(),
 )

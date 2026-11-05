@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import java.util.Locale
 
 @Composable
-private fun Page(title: String, state: UiState, engine: Engine, content: @Composable ColumnScope.() -> Unit) {
+internal fun Page(title: String, state: UiState, engine: Engine, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
             IconBtn("←", stringResource(R.string.back)) { engine.setScreen(if (state.drive.sessionId != null) Screen.DRIVE else Screen.PREPARE) }

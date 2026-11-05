@@ -237,7 +237,7 @@ fun AppRoot(engine: Engine, bridge: UiBridge, actions: AppActions) {
         var zoomSeq by remember { mutableLongStateOf(0L) }
         var zoom by remember { mutableStateOf<ZoomCmd?>(null) }
         val inDrive = state.screen == Screen.DRIVE && state.drive.sessionId != null
-        val page = state.screen == Screen.DIAGNOSTICS || state.screen == Screen.SETTINGS || state.screen == Screen.SESSIONS
+        val page = state.screen == Screen.DIAGNOSTICS || state.screen == Screen.SETTINGS || state.screen == Screen.SESSIONS || state.screen == Screen.CAMPAIGN
         val drawing = state.screen == Screen.PREPARE && state.tapMode == TapMode.ZONE && state.zone.mode == ZoneMode.POLYGON && state.drive.sessionId == null
 
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -318,6 +318,7 @@ fun AppRoot(engine: Engine, bridge: UiBridge, actions: AppActions) {
                                 Screen.DIAGNOSTICS -> DiagnosticsScreen(state, engine, actions)
                                 Screen.SETTINGS -> SettingsScreen(state, engine, actions)
                                 Screen.SESSIONS -> SessionsScreen(state, engine, actions)
+                                Screen.CAMPAIGN -> CampaignScreen(state, engine, actions)
                                 else -> {}
                             }
                         }
@@ -593,6 +594,7 @@ private fun MenuDrawer(state: UiState, engine: Engine, actions: AppActions, onCl
                 }
                 if (state.drive.sessionId != null) DrawerItem("🚗 " + stringResource(R.string.drive)) { go(Screen.DRIVE) }
                 DrawerItem("🗺 " + stringResource(R.string.prepare)) { go(Screen.PREPARE) }
+                DrawerItem("📅 " + stringResource(R.string.campaign_title)) { go(Screen.CAMPAIGN) }
                 DrawerItem("🗂 " + stringResource(R.string.sessions)) { go(Screen.SESSIONS) }
                 DrawerItem("⚙ " + stringResource(R.string.settings)) { go(Screen.SETTINGS) }
                 DrawerItem("🩺 " + stringResource(R.string.diagnostics)) { go(Screen.DIAGNOSTICS) }
@@ -873,7 +875,7 @@ private fun PlanCard(p: PlanInfo, approved: Boolean, onApprove: (Boolean) -> Uni
 }
 
 @Composable
-private fun RowScope.Kpi(value: String, label: String, color: Color? = null) {
+internal fun RowScope.Kpi(value: String, label: String, color: Color? = null) {
     Column(Modifier.weight(1f)) {
         Text(value, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = color ?: MaterialTheme.colorScheme.onSurface, maxLines = 1)
         Text(label, fontSize = 12.sp, color = mutedColor(), maxLines = 2)
