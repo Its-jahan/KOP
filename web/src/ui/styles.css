@@ -186,3 +186,11 @@ details summary { cursor: pointer; padding: 6px 0; }
   .mode-drive .map-controls { bottom: 24px; }
   .where-chip.in-drive { left: 584px; bottom: 16px; }
 }
+
+/* monthly plan */
+.days { list-style: none; padding: 0; display: grid; gap: 8px; }
+.days li { border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
+.days li.today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
+.day-head { display: flex; flex-direction: column; gap: 2px; }
+.plan-card.review { border: 2px solid var(--done); }
+.review-list { list-style: none; padding: 0; margin: 6px 0; max-height: 40vh; overflow-y: auto; }

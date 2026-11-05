@@ -21,12 +21,16 @@ import { locationHub } from './locationHub';
 import type { LaneHint, NavInstruction } from '../core/navigator';
 import type { GpsSourceState } from './gps';
 import type { LocationObservation } from '../core/types';
+import { CampaignPage, type CampaignContext, type PendingReview } from './CampaignPage';
+import type { Campaign, CampaignPlan } from '../core/campaign';
+import { buildLegs, computeTotals } from '../core/planner';
+import type { Interval } from '../core/intervals';
 
 export const APP_VERSION = '0.1.0';
 const MAX_EDGES = 60_000; // measured/tested ceiling for this build (see README)
 const GRAPH_BUFFER_M = 600;
 
-type Tab = 'prepare' | 'drive' | 'sessions' | 'settings';
+type Tab = 'prepare' | 'drive' | 'sessions' | 'settings' | 'campaign';
 type ZoneMode = 'polygon' | 'circle';
 type GraphState =
   | { kind: 'none' }
@@ -90,6 +94,9 @@ export function App() {
   const [myGps, setMyGps] = useState<GpsSourceState>('idle');
   const [follow, setFollow] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [campaignCtx, setCampaignCtx] = useState<(CampaignContext & { graph: GraphSnapshot }) | null>(null);
+  const [campaignReview, setCampaignReview] = useState<PendingReview | null>(null);
   const [legendOpen, setLegendOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const centeredOnceRef = useRef(false);
@@ -116,6 +123,8 @@ export function App() {
         void requestPersistence();
         const all = await s.listSessions();
         setSessions(all);
+        const c = (await s.getSetting<Campaign | null>('campaign')) ?? null;
+        setCampaign(c);
         setResumable(all.find((h) => h.status === 'active' || h.status === 'paused') ?? null);
       })
       .catch((e) => setStoreError(String(e.message ?? e)));
@@ -494,6 +503,101 @@ export function App() {
     if (f) mapRef.current?.follow([f.lon, f.lat], locationHub.heading, driving);
   }
 
+  // ---------- multi-day campaign ----------
+  // Load the campaign's graph/requirements whenever the campaign changes.
+  useEffect(() => {
+    if (!campaign || !store) return;
+    let cancelled = false;
+    void (async () => {
+      if (!campaignCtx || campaignCtx.graph.graphId !== campaign.graphId) {
+        const graph = await store.getGraph(campaign.graphId);
+        if (!graph || cancelled) return;
+        const gi = new GraphIndex(graph);
+        const req = computeRequirements(gi, campaign.zone);
+        setCampaignCtx({ graph, gi, zoneInfo: req.zoneInfo, requirements: req.requirements });
+      }
+      // End-of-day review: the newest campaign session not yet confirmed.
+      const all = await store.listSessions();
+      const done = new Set(campaign.history.map((h) => h.sessionId));
+      const pending = all.find((h) => h.campaignId === campaign.campaignId && !done.has(h.sessionId));
+      if (!pending) {
+        if (!cancelled) setCampaignReview(null);
+        return;
+      }
+      const loaded = await store.getSession(pending.sessionId);
+      const graph = await store.getGraph(campaign.graphId);
+      if (!loaded || !graph || cancelled) return;
+      const prog = applyEvents(emptyProgress(), loaded.events, { sessionId: pending.sessionId, graphHash: graph.contentHash, edgeLengths: new Map(graph.directedEdges.map((e) => [e.edgeId, e.lengthMm / 1000])) });
+      if (!cancelled) setCampaignReview(prog.traversals.length ? { sessionId: pending.sessionId, label: pending.label, driven: prog.union as Map<string, Interval[]> } : null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign, store, tab]);
+
+  async function saveCampaign(c: Campaign) {
+    await store?.setSetting('campaign', c);
+    setCampaign(c);
+  }
+
+  async function createCampaign(hoursPerDay: number, speedKmh: number, name: string) {
+    if (!prepared || !start?.confirmed || !zoneDef || !store) return;
+    await store.putGraph(prepared.graph);
+    const c: Campaign = {
+      campaignId: crypto.randomUUID(), name: name || t.campaignTitle, createdAt: new Date().toISOString(),
+      graphId: prepared.graph.graphId, contentHash: prepared.graph.contentHash, zone: zoneDef, policy,
+      home: { requested: start.requested, edgeId: start.edgeId, offsetMeters: start.offset },
+      settings: { hoursPerDay, speedKmh }, confirmed: [], history: [],
+    };
+    setCampaignCtx({ graph: prepared.graph, gi: prepared.gi, zoneInfo: prepared.zoneInfo, requirements: prepared.requirements });
+    await saveCampaign(c);
+  }
+
+  function dayPlan(plan: CampaignPlan, i: number): RoutePlan {
+    const d = plan.days[i];
+    const steps = [...d.approach.map((s) => ({ ...s, kind: 'approach' as const })), ...d.steps];
+    return {
+      ...plan.fullPlan, planId: crypto.randomUUID(), steps, legs: buildLegs(steps),
+      coveredRequirementIds: d.targetIds, unreachable: [], status: 'complete', createdAt: new Date().toISOString(),
+      totals: computeTotals(steps, campaignCtx?.requirements ?? [], d.targetIds, new Map()),
+    };
+  }
+
+  function showCampaignDay(plan: CampaignPlan, i: number) {
+    if (!campaignCtx) return;
+    setTab('prepare');
+    void mapRef.current?.setData('route', routeFeatures(campaignCtx.gi, dayPlan(plan, i)));
+    const b = plan.days[i].bbox;
+    void mapRef.current?.fitBbox(b, 17);
+  }
+
+  async function driveCampaignDay(plan: CampaignPlan, i: number) {
+    if (!campaign || !campaignCtx || !store) return;
+    const d = plan.days[i];
+    const targets = new Set(d.targetIds);
+    const rp = dayPlan(plan, i);
+    const sessionId = crypto.randomUUID();
+    const dayNo = campaign.history.length + 1;
+    const header: SessionHeader = {
+      schemaVersion: SCHEMA_VERSION, sessionId, graphId: campaign.graphId, contentHash: campaign.contentHash,
+      zone: { zoneId: campaign.campaignId, zoneVersion: 1, definition: campaign.zone }, vehicleProfile: 'passenger_car',
+      // Driving to and from home may leave the zone; the day route is fixed by the campaign plan.
+      boundaryPolicy: campaign.policy, returnToStart: false,
+      startSelection: { requested: campaign.home.requested, snapped: { edgeId: campaign.home.edgeId, offsetMeters: campaign.home.offsetMeters, position: campaign.home.requested, distanceMeters: 0 }, confirmed: true },
+      createdAt: new Date().toISOString(), updatedAt: Date.now(), status: 'ready', lastSeq: 2,
+      requirements: campaignCtx.requirements.filter((r) => targets.has(r.requirementId)),
+      label: `${campaign.name} · ${t.campaignDay} ${dayNo}`, campaignId: campaign.campaignId,
+    };
+    const now = Date.now();
+    const events: SessionEvent[] = [
+      { eventId: `${sessionId}:1`, seq: 1, sessionId, type: 'session_created', timestamp: now, schemaVersion: SCHEMA_VERSION, payload: { appVersion: APP_VERSION, approvedOutsideMeters: rp.totals.outsideMeters + d.approachMeters, campaignId: campaign.campaignId, day: dayNo } },
+      { eventId: `${sessionId}:2`, seq: 2, sessionId, type: 'plan_accepted', timestamp: now, schemaVersion: SCHEMA_VERSION, payload: { plan: rp, reason: 'campaign_day' } },
+    ];
+    await store.createSession(header, events);
+    await openDrive(header, events, campaignCtx.graph, campaignCtx.gi, campaignCtx.zoneInfo, true);
+  }
+
   async function refreshSessions() {
     if (store) setSessions(await store.listSessions());
   }
@@ -572,7 +676,7 @@ export function App() {
   const sheetPeek = pickStart || (step === 'area' && !sheetOpen);
   const sheetMin = step !== 'area' && sheetOpen && !pickStart; // handle tapped: show only the essentials
   const inDrive = tab === 'drive' && !!drive && !!driveSnap;
-  const pageOpen = tab === 'sessions' || tab === 'settings';
+  const pageOpen = tab === 'sessions' || tab === 'settings' || tab === 'campaign';
 
   return (
     <div className={`app ${inDrive ? 'mode-drive' : 'mode-prepare'}`}>
@@ -717,6 +821,7 @@ export function App() {
             <strong className="drawer-title">{t.appName}</strong>
             {drive && <button onClick={() => { setTab('drive'); setMenuOpen(false); }}>🚗 {t.drive}</button>}
             <button onClick={() => { setTab('prepare'); setMenuOpen(false); }}>🗺 {t.prepare}</button>
+            <button onClick={() => { setTab('campaign'); setMenuOpen(false); }} data-testid="menu-campaign">📅 {t.campaignTitle}</button>
             <button onClick={() => { setTab('sessions'); void refreshSessions(); setMenuOpen(false); }}>🗂 {t.sessions}</button>
             <button onClick={() => { setTab('settings'); setMenuOpen(false); }}>⚙ {t.settings}</button>
             <div className="seg drawer-lang">
@@ -733,12 +838,19 @@ export function App() {
         <div className="page">
           <header className="page-head">
             <button className="icon-btn" data-testid="close-page" aria-label={t.back} onClick={() => setTab(drive ? 'drive' : 'prepare')}>←</button>
-            <strong>{tab === 'sessions' ? t.sessions : t.settings}</strong>
+            <strong>{tab === 'sessions' ? t.sessions : tab === 'campaign' ? t.campaignTitle : t.settings}</strong>
           </header>
           <div className="page-body">
             {tab === 'sessions' && (
               <SessionsPanel t={t} lang={lang} sessions={sessions} onResume={resumeSession} onExport={exportSession} onImport={importFile}
                 onDelete={async (h) => { if (store && confirm(t.confirmDelete)) { await store.deleteSession(h.sessionId); await refreshSessions(); } }} />
+            )}
+            {tab === 'campaign' && (
+              <CampaignPage t={t} lang={lang} campaign={campaign} ctx={campaignCtx} review={campaignReview}
+                canCreate={!!prepared && !!start?.confirmed && prepared.graph.dataState === 'available'}
+                createHint={t.campaignCreateHint}
+                onCreate={createCampaign} onSave={saveCampaign} onShowDay={showCampaignDay} onDriveDay={driveCampaignDay}
+                onDelete={async () => { await store?.setSetting('campaign', null); setCampaign(null); setCampaignCtx(null); setCampaignReview(null); }} />
             )}
             {tab === 'settings' && <SettingsPanel t={t} lang={lang} setLang={setLang} graph={prepared?.graph ?? null} storeError={storeError} />}
           </div>

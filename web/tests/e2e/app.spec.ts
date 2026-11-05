@@ -269,3 +269,43 @@ test('lane guidance is shown in the maneuver card (Persian UI)', async ({ contex
   await expect(lanes.locator('.lane.ok')).toHaveCount(1);
   if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/lanes-fa.png' });
 });
+
+test('monthly plan: daily routes, drive a day, confirm at the end of the day, re-plan', async ({ context, page }) => {
+  await mockNetwork(context);
+  await context.grantPermissions(['geolocation']);
+  page.on('dialog', (d) => d.accept());
+  const [lon0, lat0] = ll(0, 0);
+  await context.setGeolocation({ longitude: lon0, latitude: lat0, accuracy: 5 });
+  await setup(page);
+  await drawZoneAndLoad(page);
+  await page.getByTestId('pick-start').click();
+  await mapClick(page, 10, 2);
+  await page.getByTestId('confirm-start').click();
+  // create the monthly plan with a tiny daily budget so the area needs several days
+  await page.getByTestId('menu').click();
+  await page.getByTestId('menu-campaign').click();
+  await page.getByTestId('hours').fill('0.05');
+  await page.getByTestId('campaign-create-btn').click();
+  await expect(page.getByTestId('campaign')).toBeVisible();
+  await expect(page.getByTestId('campaign-day-2')).toBeVisible();
+  const daysBefore = await page.locator('.days li').count();
+  // drive today
+  await page.getByTestId('campaign-drive').click();
+  await expect(page.getByTestId('drive-panel')).toBeVisible();
+  for (let x = 0; x <= 100; x += 10) {
+    const [lon, lat] = ll(x, 0);
+    await context.setGeolocation({ longitude: lon, latitude: lat, accuracy: 5 });
+    await page.waitForTimeout(1050);
+  }
+  await page.getByTestId('pause').click();
+  // end-of-day review
+  await page.getByTestId('more').click();
+  await page.getByTestId('more-menu').click();
+  await page.getByTestId('menu-campaign').click();
+  await expect(page.getByTestId('campaign-review')).toBeVisible();
+  await page.getByTestId('campaign-confirm').click();
+  await expect(page.getByTestId('campaign-review')).toHaveCount(0);
+  await expect(page.getByText('Confirmed days')).toBeVisible();
+  expect(await page.locator('.days li').count()).toBeLessThanOrEqual(daysBefore);
+  if (process.env.SHOT_DIR) await page.screenshot({ path: process.env.SHOT_DIR + '/campaign.png' });
+});

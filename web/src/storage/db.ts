@@ -31,6 +31,8 @@ export interface SessionHeader {
   lastSeq: number;
   requirements: RequiredInterval[];
   label: string;
+  /** Set when this session drives one day of a multi-day campaign. */
+  campaignId?: string;
 }
 
 export class StorageError extends Error {
