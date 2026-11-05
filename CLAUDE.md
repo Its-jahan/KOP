@@ -1,5 +1,7 @@
 # Project rules
 
+- **No pull requests.** Commit and push directly to `main`.
+
 - **Web first.** Every feature or fix is implemented in the web app (`web/`) first, tested there,
   and only then ported to the Android app (`android/`). Keep both behaviourally identical.
 - The shared contract in `contract/` (schema, fixtures) is authoritative for both apps; the
